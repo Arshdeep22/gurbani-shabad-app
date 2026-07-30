@@ -119,6 +119,7 @@ export default function ReadPage() {
     const p = current ? progressRef.current[current.id] : null;
     setUnderstanding(p?.understanding || "");
     setShowUnderstanding(false);
+    if (!loading) window.scrollTo({ top: 0, behavior: "smooth" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentIndex, loading]);
 
@@ -201,7 +202,7 @@ export default function ReadPage() {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="glass-card animate-pulse px-8 py-6 text-[#6a5b8a]">
-          ਤੁਹਾਡੀ ਯਾਤਰਾ ਲੋਡ ਹੋ ਰਹੀ ਹੈ…
+          ਤੁਹਾਡੇ ਲਈ ਸ਼ਬਦ ਲੋਡ ਹੋ ਰਿਹਾ ਹੈ…
         </div>
       </div>
     );

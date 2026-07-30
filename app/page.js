@@ -90,7 +90,7 @@ export default function LoginPage() {
             ਗੁਰਬਾਣੀ ਵਿਚਾਰ
           </h1>
           <p className="mt-2 text-sm text-[#6a5b8a]">
-            ਸ਼ਬਦ ਪੜ੍ਹੋ, ਸਮਝੋ ਤੇ ਯਾਤਰਾ ਕਰੋ
+            ਸ਼ਬਦ ਪੜ੍ਹੋ, ਸਮਝੋ ਤੇ ਕਮਾਓ
           </p>
         </div>
 
@@ -145,7 +145,7 @@ export default function LoginPage() {
             )}
             <div>
               <label className="mb-1.5 block text-sm font-medium text-[#6a5b8a]">
-                ਯੂਜ਼ਰਨੇਮ
+                ਨਾਮ
               </label>
               <input
                 className="input-soft"
