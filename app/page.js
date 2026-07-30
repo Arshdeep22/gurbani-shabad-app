@@ -152,7 +152,7 @@ export default function LoginPage() {
                 type="text"
                 autoCapitalize="none"
                 autoCorrect="off"
-                placeholder="ਜਿਵੇਂ singh_ji"
+                placeholder="ਜਿਵੇਂ ਅਮਨਦੀਪ ਕੌਰ ਜੀ"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
