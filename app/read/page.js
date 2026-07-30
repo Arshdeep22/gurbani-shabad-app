@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabaseClient";
 import TopBar from "../../components/TopBar";
@@ -18,6 +18,16 @@ export default function ReadPage() {
   const [allDone, setAllDone] = useState(false);
   const [showUnderstanding, setShowUnderstanding] = useState(false);
 
+  // refs to always read fresh values inside async handlers
+  const progressRef = useRef({});
+  const profileRef = useRef(null);
+  const ensuringRef = useRef({}); // shabadId -> in-flight insert promise
+
+  function setProgress(shabadId, row) {
+    progressRef.current = { ...progressRef.current, [shabadId]: row };
+    setProgressMap(progressRef.current);
+  }
+
   const loadEverything = useCallback(async () => {
     const { data: sessionData } = await supabase.auth.getSession();
     if (!sessionData?.session) {
@@ -32,6 +42,7 @@ export default function ReadPage() {
       .eq("id", uid)
       .single();
     setProfile(prof);
+    profileRef.current = prof;
 
     const { data: sh } = await supabase
       .from("shabads")
@@ -45,6 +56,7 @@ export default function ReadPage() {
 
     const map = {};
     (prog || []).forEach((p) => (map[p.shabad_id] = p));
+    progressRef.current = map;
     setProgressMap(map);
     setShabads(sh || []);
 
@@ -69,41 +81,57 @@ export default function ReadPage() {
   const current = shabads[currentIndex];
   const currentProgress = current ? progressMap[current.id] : null;
 
+  // Create a progress row for the current shabad if it doesn't exist yet.
+  // Uses a per-shabad in-flight promise so concurrent callers await the same
+  // insert instead of creating duplicates or bailing out.
   const ensureProgress = useCallback(async () => {
-    if (!current || !profile) return null;
-    if (currentProgress) return currentProgress;
-    const { data, error } = await supabase
-      .from("reading_progress")
-      .insert({
-        user_id: profile.id,
-        shabad_id: current.id,
-        started_at: new Date().toISOString(),
-      })
-      .select()
-      .single();
-    if (!error && data) {
-      setProgressMap((m) => ({ ...m, [current.id]: data }));
-      return data;
-    }
-    return null;
-  }, [current, profile, currentProgress]);
+    if (!current || !profileRef.current) return null;
+    const existing = progressRef.current[current.id];
+    if (existing) return existing;
+
+    const inFlight = ensuringRef.current[current.id];
+    if (inFlight) return inFlight;
+
+    const shabadId = current.id;
+    const promise = (async () => {
+      const { data } = await supabase
+        .from("reading_progress")
+        .insert({
+          user_id: profileRef.current.id,
+          shabad_id: shabadId,
+          started_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
+      if (data) setProgress(shabadId, data);
+      delete ensuringRef.current[shabadId];
+      return data || null;
+    })();
+
+    ensuringRef.current[shabadId] = promise;
+    return promise;
+  }, [current]);
 
   useEffect(() => {
-    if (!loading && current && !currentProgress) {
+    if (!loading && current && !progressRef.current[current.id]) {
       ensureProgress();
     }
-    setUnderstanding(currentProgress?.understanding || "");
+    const p = current ? progressRef.current[current.id] : null;
+    setUnderstanding(p?.understanding || "");
     setShowUnderstanding(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentIndex, loading]);
 
   async function toggleRead(which) {
-    const prog = (await ensureProgress()) || currentProgress;
+    if (!current) return;
+    const prog = (await ensureProgress()) || progressRef.current[current.id];
     if (!prog) return;
+
     const field = `read_${which}`;
     const atField = `read_${which}_at`;
     const newVal = !prog[field];
 
+    // enforce sequential order
     if (newVal) {
       if (which === 2 && !prog.read_1) return;
       if (which === 3 && !prog.read_2) return;
@@ -112,19 +140,24 @@ export default function ReadPage() {
       if (which === 2 && prog.read_3) return;
     }
 
-    const update = {
+    // optimistic update
+    const optimistic = {
+      ...prog,
       [field]: newVal,
       [atField]: newVal ? new Date().toISOString() : null,
     };
-    const { data, error } = await supabase
+    setProgress(current.id, optimistic);
+
+    const { data } = await supabase
       .from("reading_progress")
-      .update(update)
+      .update({
+        [field]: newVal,
+        [atField]: optimistic[atField],
+      })
       .eq("id", prog.id)
       .select()
       .single();
-    if (!error && data) {
-      setProgressMap((m) => ({ ...m, [current.id]: data }));
-    }
+    if (data) setProgress(current.id, data);
   }
 
   const allThreeChecked =
@@ -137,10 +170,11 @@ export default function ReadPage() {
   }
 
   async function handleSubmitUnderstanding() {
-    if (!understanding.trim()) return;
+    if (!understanding.trim() || !current) return;
+    const prog = progressRef.current[current.id];
+    if (!prog) return;
     setSaving(true);
-    const prog = currentProgress;
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("reading_progress")
       .update({
         understanding: understanding.trim(),
@@ -151,8 +185,8 @@ export default function ReadPage() {
       .select()
       .single();
     setSaving(false);
-    if (!error && data) {
-      setProgressMap((m) => ({ ...m, [current.id]: data }));
+    if (data) {
+      setProgress(current.id, data);
       if (currentIndex < shabads.length - 1) {
         setCurrentIndex((i) => i + 1);
         setUnderstanding("");
@@ -167,7 +201,7 @@ export default function ReadPage() {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="glass-card animate-pulse px-8 py-6 text-[#6a5b8a]">
-          Loading your journey…
+          ਤੁਹਾਡੀ ਯਾਤਰਾ ਲੋਡ ਹੋ ਰਹੀ ਹੈ…
         </div>
       </div>
     );
@@ -176,10 +210,10 @@ export default function ReadPage() {
   if (!shabads.length) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-8">
-        <TopBar title="Gurbani Reflections" name={profile?.full_name} />
+        <TopBar title="ਗੁਰਬਾਣੀ ਵਿਚਾਰ" name={profile?.full_name} />
         <div className="glass-card p-10 text-center">
           <p className="text-lg text-[#5b4c7d]">
-            No shabads have been added yet. Please check back soon. 🌸
+            ਅਜੇ ਕੋਈ ਸ਼ਬਦ ਸ਼ਾਮਲ ਨਹੀਂ ਕੀਤਾ ਗਿਆ। ਕਿਰਪਾ ਕਰਕੇ ਬਾਅਦ ਵਿੱਚ ਵੇਖੋ। 🌸
           </p>
         </div>
       </div>
@@ -200,7 +234,7 @@ export default function ReadPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-6">
       <TopBar
-        title="Gurbani Reflections"
+        title="ਗੁਰਬਾਣੀ ਵਿਚਾਰ"
         name={profile?.full_name}
         right={<CountdownTimer deadline={deadline} />}
       />
@@ -209,9 +243,9 @@ export default function ReadPage() {
       <div className="mb-6">
         <div className="mb-1.5 flex items-center justify-between text-xs font-medium text-[#6a5b8a]">
           <span>
-            Shabad {currentIndex + 1} of {shabads.length}
+            ਸ਼ਬਦ {currentIndex + 1} / {shabads.length}
           </span>
-          <span>{completedCount} completed</span>
+          <span>{completedCount} ਪੂਰੇ ਹੋਏ</span>
         </div>
         <div className="h-2.5 w-full overflow-hidden rounded-full bg-white/50">
           <div
@@ -227,10 +261,10 @@ export default function ReadPage() {
             🎉
           </div>
           <h2 className="text-2xl font-bold text-[#5b4c7d]">
-            You have completed all shabads!
+            ਤੁਸੀਂ ਸਾਰੇ ਸ਼ਬਦ ਪੂਰੇ ਕਰ ਲਏ ਹਨ!
           </h2>
           <p className="mt-2 text-[#6a5b8a]">
-            Thank you for your dedication. ਧੰਨਵਾਦ 🙏
+            ਤੁਹਾਡੀ ਲਗਨ ਲਈ ਧੰਨਵਾਦ। 🙏
           </p>
         </div>
       ) : (
@@ -264,7 +298,7 @@ export default function ReadPage() {
           {/* Reading checks */}
           <div className="glass-card mb-6 p-6">
             <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-[#8a7ba8]">
-              Confirm your reading
+              ਆਪਣੀ ਪੜ੍ਹਾਈ ਦੀ ਪੁਸ਼ਟੀ ਕਰੋ
             </h3>
             <div className="space-y-3">
               {[1, 2, 3].map((n) => {
@@ -287,13 +321,13 @@ export default function ReadPage() {
                       onChange={() => toggleRead(n)}
                     />
                     <span className="text-sm font-medium text-[#5b4c7d]">
-                      I have read and understood for{" "}
+                      ਮੈਂ ਇਸਨੂੰ{" "}
                       {n === 1
-                        ? "the first"
+                        ? "ਪਹਿਲੀ"
                         : n === 2
-                        ? "the second"
-                        : "the third"}{" "}
-                      time
+                        ? "ਦੂਜੀ"
+                        : "ਤੀਜੀ"}{" "}
+                      ਵਾਰ ਪੜ੍ਹ ਤੇ ਸਮਝ ਲਿਆ ਹੈ
                     </span>
                   </label>
                 );
@@ -306,7 +340,7 @@ export default function ReadPage() {
                 disabled={!allThreeChecked}
                 className="btn-3d mt-6 w-full"
               >
-                Next →
+                ਅੱਗੇ →
               </button>
             )}
           </div>
@@ -315,15 +349,14 @@ export default function ReadPage() {
           {showUnderstanding && (
             <div className="glass-card animate-fadeInUp p-6">
               <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-[#8a7ba8]">
-                In your own words
+                ਆਪਣੇ ਸ਼ਬਦਾਂ ਵਿੱਚ
               </h3>
               <p className="mb-4 text-sm text-[#6a5b8a]">
-                Share what you understood from this shabad. This will be saved
-                for review.
+                ਇਸ ਸ਼ਬਦ ਤੋਂ ਤੁਸੀਂ ਕੀ ਸਮਝਿਆ, ਸਾਂਝਾ ਕਰੋ। ਇਹ ਸਮੀਖਿਆ ਲਈ ਸੰਭਾਲਿਆ ਜਾਵੇਗਾ।
               </p>
               <textarea
                 className="input-soft min-h-[140px] resize-y"
-                placeholder="Write your understanding here…"
+                placeholder="ਆਪਣੀ ਸਮਝ ਇੱਥੇ ਲਿਖੋ…"
                 value={understanding}
                 onChange={(e) => setUnderstanding(e.target.value)}
               />
@@ -332,7 +365,7 @@ export default function ReadPage() {
                 disabled={saving || !understanding.trim()}
                 className="btn-3d mt-4 w-full"
               >
-                {saving ? "Saving…" : "Submit & Continue →"}
+                {saving ? "ਸੰਭਾਲ ਰਹੇ…" : "ਭੇਜੋ ਤੇ ਅੱਗੇ ਵਧੋ →"}
               </button>
             </div>
           )}

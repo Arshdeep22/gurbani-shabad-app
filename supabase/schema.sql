@@ -73,10 +73,11 @@ drop policy if exists "profiles_update_own_or_admin" on public.profiles;
 create policy "profiles_update_own_or_admin" on public.profiles
   for update using (auth.uid() = id or public.is_admin());
 
--- Shabads policies: everyone authenticated can read; only admin can write.
+-- Shabads policies: shabad text is public reference material, so allow any
+-- request (anon or authenticated) to read. Only admins can write.
 drop policy if exists "shabads_select_all" on public.shabads;
 create policy "shabads_select_all" on public.shabads
-  for select using (auth.role() = 'authenticated');
+  for select using (true);
 
 drop policy if exists "shabads_admin_write" on public.shabads;
 create policy "shabads_admin_write" on public.shabads

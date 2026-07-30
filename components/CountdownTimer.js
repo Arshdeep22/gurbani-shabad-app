@@ -35,11 +35,11 @@ export default function CountdownTimer({ deadline }) {
           ? "bg-amber-100/80 text-amber-700"
           : "bg-white/70 text-[#5b4c7d]"
       }`}
-      title={expired ? "Time is over" : "Time remaining to complete"}
+      title={expired ? "ਸਮਾਂ ਖ਼ਤਮ ਹੋ ਗਿਆ" : "ਪੂਰਾ ਕਰਨ ਲਈ ਬਾਕੀ ਸਮਾਂ"}
     >
       <span className="text-base">⏳</span>
       {expired ? (
-        <span>Overdue</span>
+        <span>ਸਮਾਂ ਖ਼ਤਮ</span>
       ) : (
         <span className="tabular-nums">
           {days > 0 && `${days}d `}

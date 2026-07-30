@@ -54,7 +54,7 @@ export default function AdminDashboard() {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="glass-card animate-pulse px-8 py-6 text-[#6a5b8a]">
-          Loading dashboard…
+          ਡੈਸ਼ਬੋਰਡ ਲੋਡ ਹੋ ਰਿਹਾ ਹੈ…
         </div>
       </div>
     );
@@ -83,25 +83,25 @@ export default function AdminDashboard() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-6">
       <TopBar
-        title="Admin Dashboard"
+        title="ਐਡਮਿਨ ਡੈਸ਼ਬੋਰਡ"
         name={profile?.full_name}
         right={
           <button
             className="btn-ghost text-sm"
             onClick={() => router.push("/admin/shabads")}
           >
-            ✦ Manage Shabads
+            ✦ ਸ਼ਬਦ ਪ੍ਰਬੰਧਨ
           </button>
         }
       />
 
       {/* Stat cards */}
       <div className="mb-8 grid grid-cols-2 gap-4 md:grid-cols-4">
-        <StatCard label="Total Shabads" value={totalShabads} emoji="📖" />
-        <StatCard label="Readers" value={users.length} emoji="🧑‍🤝‍🧑" />
-        <StatCard label="Active Readers" value={activeUsers} emoji="🔥" />
+        <StatCard label="ਕੁੱਲ ਸ਼ਬਦ" value={totalShabads} emoji="📖" />
+        <StatCard label="ਪਾਠਕ" value={users.length} emoji="🧑‍🤝‍🧑" />
+        <StatCard label="ਸਰਗਰਮ ਪਾਠਕ" value={activeUsers} emoji="🔥" />
         <StatCard
-          label="Total Completions"
+          label="ਕੁੱਲ ਪੂਰੇ ਹੋਏ"
           value={totalCompletions}
           emoji="✅"
         />
@@ -111,11 +111,11 @@ export default function AdminDashboard() {
         {/* Users progress */}
         <div className="glass-card p-6">
           <h3 className="mb-4 text-lg font-semibold text-[#5b4c7d]">
-            Reader Progress
+            ਪਾਠਕ ਦੀ ਤਰੱਕੀ
           </h3>
           <div className="space-y-3">
             {users.length === 0 && (
-              <p className="text-sm text-[#8a7ba8]">No readers yet.</p>
+              <p className="text-sm text-[#8a7ba8]">ਅਜੇ ਕੋਈ ਪਾਠਕ ਨਹੀਂ।</p>
             )}
             {users.map((u) => {
               const done = userCompleted(u.id);
@@ -134,7 +134,7 @@ export default function AdminDashboard() {
                 >
                   <div className="mb-1 flex items-center justify-between">
                     <span className="text-sm font-semibold text-[#5b4c7d]">
-                      {u.full_name || u.email}
+                      {u.full_name || u.username}
                     </span>
                     <span className="text-xs font-medium text-[#8a7ba8]">
                       {done}/{totalShabads}
@@ -155,11 +155,11 @@ export default function AdminDashboard() {
         {/* Shabad-wise stats */}
         <div className="glass-card p-6">
           <h3 className="mb-4 text-lg font-semibold text-[#5b4c7d]">
-            Shabad Completion
+            ਸ਼ਬਦ ਪੂਰਤੀ
           </h3>
           <div className="space-y-3">
             {shabads.length === 0 && (
-              <p className="text-sm text-[#8a7ba8]">No shabads added yet.</p>
+              <p className="text-sm text-[#8a7ba8]">ਅਜੇ ਕੋਈ ਸ਼ਬਦ ਸ਼ਾਮਲ ਨਹੀਂ।</p>
             )}
             {shabads.map((s) => {
               const done = shabadCompleted(s.id);
@@ -194,23 +194,23 @@ export default function AdminDashboard() {
         <div className="glass-card mt-6 animate-fadeInUp p-6">
           <div className="mb-4 flex items-center justify-between">
             <h3 className="text-lg font-semibold text-[#5b4c7d]">
-              {selectedUser.full_name || selectedUser.email} — Details
+              {selectedUser.full_name || selectedUser.username} — ਵੇਰਵਾ
             </h3>
             <button
               className="btn-ghost text-sm"
               onClick={() => setSelectedUser(null)}
             >
-              Close
+              ਬੰਦ ਕਰੋ
             </button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead>
                 <tr className="text-xs uppercase tracking-wide text-[#8a7ba8]">
-                  <th className="px-3 py-2">Shabad</th>
-                  <th className="px-3 py-2">Reads</th>
-                  <th className="px-3 py-2">Understanding</th>
-                  <th className="px-3 py-2">Submitted</th>
+                  <th className="px-3 py-2">ਸ਼ਬਦ</th>
+                  <th className="px-3 py-2">ਪੜ੍ਹਾਈ</th>
+                  <th className="px-3 py-2">ਸਮਝ</th>
+                  <th className="px-3 py-2">ਭੇਜਿਆ</th>
                 </tr>
               </thead>
               <tbody>

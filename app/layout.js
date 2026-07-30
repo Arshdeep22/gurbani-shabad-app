@@ -1,9 +1,9 @@
 import "./globals.css";
 
 export const metadata = {
-  title: "Gurbani Shabad — Read & Reflect",
+  title: "ਗੁਰਬਾਣੀ ਵਿਚਾਰ",
   description:
-    "A serene space to read Gurbani shabads, reflect on their meanings, and track your journey.",
+    "ਗੁਰਬਾਣੀ ਸ਼ਬਦ ਪੜ੍ਹਨ, ਅਰਥ ਸਮਝਣ ਅਤੇ ਆਪਣੀ ਯਾਤਰਾ ਦੀ ਨਿਗਰਾਨੀ ਲਈ ਇੱਕ ਸ਼ਾਂਤ ਥਾਂ।",
 };
 
 export const viewport = {

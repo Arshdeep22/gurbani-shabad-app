@@ -25,7 +25,7 @@ export default function TopBar({ title, name, right }) {
       <div className="flex items-center gap-2">
         {right}
         <button onClick={logout} className="btn-ghost text-sm">
-          Logout
+          ਲੌਗ-ਆਊਟ
         </button>
       </div>
     </div>

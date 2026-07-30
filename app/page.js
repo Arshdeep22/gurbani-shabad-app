@@ -4,17 +4,24 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabaseClient";
 
+// Supabase Auth needs an email under the hood. We derive a stable synthetic
+// email from the username so the UI can stay username-only.
+const EMAIL_DOMAIN = "gurbani.local";
+function usernameToEmail(username) {
+  const clean = String(username).trim().toLowerCase().replace(/\s+/g, "");
+  return `${clean}@${EMAIL_DOMAIN}`;
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [mode, setMode] = useState("login"); // 'login' | 'signup'
   const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState(null);
   const [err, setErr] = useState(null);
 
-  // If already logged in, route based on role.
   useEffect(() => {
     (async () => {
       const { data } = await supabase.auth.getSession();
@@ -44,16 +51,17 @@ export default function LoginPage() {
     setMsg(null);
     setLoading(true);
     try {
+      const email = usernameToEmail(username);
       if (mode === "signup") {
         const { error } = await supabase.auth.signUp({
           email,
           password,
-          options: { data: { full_name: fullName } },
+          options: {
+            data: { full_name: fullName || username, username: username.trim() },
+          },
         });
         if (error) throw error;
-        setMsg(
-          "Account created! If email confirmation is on, check your inbox. Otherwise you can log in now."
-        );
+        setMsg("ਖਾਤਾ ਬਣ ਗਿਆ! ਹੁਣ ਤੁਸੀਂ ਲੌਗ-ਇਨ ਕਰ ਸਕਦੇ ਹੋ।");
         setMode("login");
       } else {
         const { error } = await supabase.auth.signInWithPassword({
@@ -64,7 +72,7 @@ export default function LoginPage() {
         await routeByRole();
       }
     } catch (e) {
-      setErr(e.message || "Something went wrong");
+      setErr(e.message || "ਕੁਝ ਗੜਬੜ ਹੋ ਗਈ");
     } finally {
       setLoading(false);
     }
@@ -79,10 +87,10 @@ export default function LoginPage() {
             <span className="gurmukhi text-4xl text-white">ੴ</span>
           </div>
           <h1 className="text-3xl font-bold text-[#5b4c7d]">
-            Gurbani Reflections
+            ਗੁਰਬਾਣੀ ਵਿਚਾਰ
           </h1>
           <p className="mt-2 text-sm text-[#6a5b8a]">
-            Read, understand & journey through shabads
+            ਸ਼ਬਦ ਪੜ੍ਹੋ, ਸਮਝੋ ਤੇ ਯਾਤਰਾ ਕਰੋ
           </p>
         </div>
 
@@ -101,7 +109,7 @@ export default function LoginPage() {
                   : "text-[#8a7ba8]"
               }`}
             >
-              Login
+              ਲੌਗ-ਇਨ
             </button>
             <button
               onClick={() => {
@@ -115,7 +123,7 @@ export default function LoginPage() {
                   : "text-[#8a7ba8]"
               }`}
             >
-              Sign Up
+              ਨਵਾਂ ਖਾਤਾ
             </button>
           </div>
 
@@ -123,12 +131,12 @@ export default function LoginPage() {
             {mode === "signup" && (
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-[#6a5b8a]">
-                  Full Name
+                  ਪੂਰਾ ਨਾਮ
                 </label>
                 <input
                   className="input-soft"
                   type="text"
-                  placeholder="Your name"
+                  placeholder="ਤੁਹਾਡਾ ਨਾਮ"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   required
@@ -137,20 +145,22 @@ export default function LoginPage() {
             )}
             <div>
               <label className="mb-1.5 block text-sm font-medium text-[#6a5b8a]">
-                Email
+                ਯੂਜ਼ਰਨੇਮ
               </label>
               <input
                 className="input-soft"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                type="text"
+                autoCapitalize="none"
+                autoCorrect="off"
+                placeholder="ਜਿਵੇਂ singh_ji"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 required
               />
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-medium text-[#6a5b8a]">
-                Password
+                ਪਾਸਵਰਡ
               </label>
               <input
                 className="input-soft"
@@ -176,10 +186,10 @@ export default function LoginPage() {
 
             <button type="submit" className="btn-3d w-full" disabled={loading}>
               {loading
-                ? "Please wait..."
+                ? "ਉਡੀਕ ਕਰੋ…"
                 : mode === "login"
-                ? "Enter"
-                : "Create account"}
+                ? "ਦਾਖਲ ਹੋਵੋ"
+                : "ਖਾਤਾ ਬਣਾਓ"}
             </button>
           </form>
         </div>

@@ -106,13 +106,13 @@ export default function ManageShabads() {
     }
     if (parsed.length) {
       setLines(parsed);
-      setMsg(`Parsed ${parsed.length} line pair(s) from bulk text.`);
+      setMsg(`ਬਲਕ ਟੈਕਸਟ ਤੋਂ ${parsed.length} ਲਾਈਨ ਜੋੜੀਆਂ ਗਈਆਂ।`);
     }
   }
 
   async function saveShabad() {
     if (!title.trim()) {
-      setMsg("Please enter a title.");
+      setMsg("ਕਿਰਪਾ ਕਰਕੇ ਸਿਰਲੇਖ ਭਰੋ।");
       return;
     }
     const cleanLines = lines.filter(
@@ -137,19 +137,19 @@ export default function ManageShabads() {
     }
     setSaving(false);
     if (error) {
-      setMsg("Error: " + error.message);
+      setMsg("ਗੜਬੜ: " + error.message);
       return;
     }
-    setMsg(editingId ? "Shabad updated!" : "Shabad added!");
+    setMsg(editingId ? "ਸ਼ਬਦ ਅੱਪਡੇਟ ਹੋ ਗਿਆ!" : "ਸ਼ਬਦ ਸ਼ਾਮਲ ਹੋ ਗਿਆ!");
     await refreshShabads();
     resetForm();
   }
 
   async function deleteShabad(id) {
-    if (!confirm("Delete this shabad? This cannot be undone.")) return;
+    if (!confirm("ਕੀ ਇਹ ਸ਼ਬਦ ਮਿਟਾਉਣਾ ਹੈ? ਇਹ ਵਾਪਸ ਨਹੀਂ ਹੋ ਸਕਦਾ।")) return;
     const { error } = await supabase.from("shabads").delete().eq("id", id);
     if (error) {
-      alert("Error: " + error.message);
+      alert("ਗੜਬੜ: " + error.message);
       return;
     }
     await refreshShabads();
@@ -160,7 +160,7 @@ export default function ManageShabads() {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="glass-card animate-pulse px-8 py-6 text-[#6a5b8a]">
-          Loading…
+          ਲੋਡ ਹੋ ਰਿਹਾ ਹੈ…
         </div>
       </div>
     );
@@ -169,14 +169,14 @@ export default function ManageShabads() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-6">
       <TopBar
-        title="Manage Shabads"
+        title="ਸ਼ਬਦ ਪ੍ਰਬੰਧਨ"
         name={profile?.full_name}
         right={
           <button
             className="btn-ghost text-sm"
             onClick={() => router.push("/admin")}
           >
-            ← Dashboard
+            ← ਡੈਸ਼ਬੋਰਡ
           </button>
         }
       />
@@ -184,13 +184,13 @@ export default function ManageShabads() {
       {/* Editor */}
       <div className="glass-card mb-8 p-6">
         <h3 className="mb-4 text-lg font-semibold text-[#5b4c7d]">
-          {editingId ? "Edit Shabad" : "Add New Shabad"}
+          {editingId ? "ਸ਼ਬਦ ਸੋਧੋ" : "ਨਵਾਂ ਸ਼ਬਦ ਸ਼ਾਮਲ ਕਰੋ"}
         </h3>
 
         <div className="grid gap-4 md:grid-cols-3">
           <div className="md:col-span-2">
             <label className="mb-1.5 block text-sm font-medium text-[#6a5b8a]">
-              Title (Raag / heading)
+              ਸਿਰਲੇਖ (ਰਾਗ / ਸਿਰਲੇਖ)
             </label>
             <input
               className="input-soft gurmukhi"
@@ -201,7 +201,7 @@ export default function ManageShabads() {
           </div>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-[#6a5b8a]">
-              Deadline (days)
+              ਸਮਾਂ-ਸੀਮਾ (ਦਿਨ)
             </label>
             <input
               type="number"
@@ -213,7 +213,7 @@ export default function ManageShabads() {
           </div>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-[#6a5b8a]">
-              Order Index
+              ਕ੍ਰਮ ਨੰਬਰ
             </label>
             <input
               type="number"
@@ -227,56 +227,56 @@ export default function ManageShabads() {
         {/* Bulk paste helper */}
         <div className="mt-4 rounded-2xl bg-white/40 p-4">
           <label className="mb-1.5 block text-sm font-medium text-[#6a5b8a]">
-            Quick paste (optional): paste alternating Gurmukhi & meaning blocks
-            separated by blank lines, then click Parse.
+            ਤੇਜ਼ ਪੇਸਟ (ਚੋਣਵਾਂ): ਗੁਰਮੁਖੀ ਤੇ ਅਰਥ ਦੇ ਹਿੱਸੇ ਖਾਲੀ ਲਾਈਨਾਂ ਨਾਲ ਵੱਖ ਕਰਕੇ
+            ਪੇਸਟ ਕਰੋ, ਫਿਰ "ਲਾਈਨਾਂ ਬਣਾਓ" ਦਬਾਓ।
           </label>
           <textarea
             className="input-soft min-h-[100px] resize-y gurmukhi"
             value={bulkText}
             onChange={(e) => setBulkText(e.target.value)}
-            placeholder={"ਗੁਰਮੁਖੀ ਲਾਈਨ\n\nMeaning line\n\nnext gurmukhi\n\nnext meaning"}
+            placeholder={"ਗੁਰਮੁਖੀ ਲਾਈਨ\n\nਅਰਥ ਲਾਈਨ\n\nਅਗਲੀ ਗੁਰਮੁਖੀ\n\nਅਗਲਾ ਅਰਥ"}
           />
           <button className="btn-ghost mt-2 text-sm" onClick={parseBulk}>
-            Parse into lines
+            ਲਾਈਨਾਂ ਬਣਾਓ
           </button>
         </div>
 
         {/* Line editor */}
         <div className="mt-5 space-y-4">
           <p className="text-sm font-semibold uppercase tracking-wide text-[#8a7ba8]">
-            Lines
+            ਲਾਈਨਾਂ
           </p>
           {lines.map((line, i) => (
             <div key={i} className="rounded-2xl bg-white/40 p-4">
               <div className="mb-2 flex items-center justify-between">
                 <span className="text-xs font-medium text-[#8a7ba8]">
-                  Line {i + 1}
+                  ਲਾਈਨ {i + 1}
                 </span>
                 {lines.length > 1 && (
                   <button
                     className="text-xs text-rose-500 hover:underline"
                     onClick={() => removeLine(i)}
                   >
-                    Remove
+                    ਹਟਾਓ
                   </button>
                 )}
               </div>
               <input
                 className="input-soft gurmukhi mb-2"
-                placeholder="Gurmukhi line"
+                placeholder="ਗੁਰਮੁਖੀ ਲਾਈਨ"
                 value={line.gurmukhi}
                 onChange={(e) => updateLine(i, "gurmukhi", e.target.value)}
               />
               <textarea
                 className="input-soft gurmukhi min-h-[70px] resize-y"
-                placeholder="Meaning (Punjabi / English)"
+                placeholder="ਅਰਥ"
                 value={line.meaning}
                 onChange={(e) => updateLine(i, "meaning", e.target.value)}
               />
             </div>
           ))}
           <button className="btn-ghost text-sm" onClick={addLine}>
-            + Add line
+            + ਲਾਈਨ ਜੋੜੋ
           </button>
         </div>
 
@@ -288,11 +288,15 @@ export default function ManageShabads() {
 
         <div className="mt-6 flex gap-3">
           <button className="btn-3d" onClick={saveShabad} disabled={saving}>
-            {saving ? "Saving…" : editingId ? "Update Shabad" : "Add Shabad"}
+            {saving
+              ? "ਸੰਭਾਲ ਰਹੇ…"
+              : editingId
+              ? "ਸ਼ਬਦ ਅੱਪਡੇਟ ਕਰੋ"
+              : "ਸ਼ਬਦ ਸ਼ਾਮਲ ਕਰੋ"}
           </button>
           {editingId && (
             <button className="btn-ghost" onClick={resetForm}>
-              Cancel
+              ਰੱਦ ਕਰੋ
             </button>
           )}
         </div>
@@ -301,11 +305,11 @@ export default function ManageShabads() {
       {/* Existing shabads */}
       <div className="glass-card p-6">
         <h3 className="mb-4 text-lg font-semibold text-[#5b4c7d]">
-          Existing Shabads ({shabads.length})
+          ਮੌਜੂਦਾ ਸ਼ਬਦ ({shabads.length})
         </h3>
         <div className="space-y-3">
           {shabads.length === 0 && (
-            <p className="text-sm text-[#8a7ba8]">No shabads yet.</p>
+            <p className="text-sm text-[#8a7ba8]">ਅਜੇ ਕੋਈ ਸ਼ਬਦ ਨਹੀਂ।</p>
           )}
           {shabads.map((s) => (
             <div
@@ -317,7 +321,7 @@ export default function ManageShabads() {
                   #{s.order_index} — {s.title}
                 </p>
                 <p className="text-xs text-[#8a7ba8]">
-                  {s.lines?.length || 0} lines · {s.deadline_days} day deadline
+                  {s.lines?.length || 0} ਲਾਈਨਾਂ · {s.deadline_days} ਦਿਨ ਦੀ ਸਮਾਂ-ਸੀਮਾ
                 </p>
               </div>
               <div className="flex shrink-0 gap-2">
@@ -325,13 +329,13 @@ export default function ManageShabads() {
                   className="btn-ghost text-sm"
                   onClick={() => startEdit(s)}
                 >
-                  Edit
+                  ਸੋਧੋ
                 </button>
                 <button
                   className="rounded-2xl bg-rose-100/70 px-4 py-2 text-sm font-medium text-rose-600 transition-all hover:bg-rose-200/70"
                   onClick={() => deleteShabad(s.id)}
                 >
-                  Delete
+                  ਮਿਟਾਓ
                 </button>
               </div>
             </div>
