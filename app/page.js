@@ -86,6 +86,9 @@ export default function LoginPage() {
           <div className="mx-auto mb-4 flex h-20 w-20 animate-floaty items-center justify-center rounded-3xl bg-gradient-to-br from-pastel-purple to-pastel-teal shadow-soft-lg">
             <span className="gurmukhi text-4xl text-white">ੴ</span>
           </div>
+          <p className="mb-3 gurmukhi text-sm font-medium text-[#8a7ba8]">
+            ਵਾਹਿਗੁਰੂ ਜੀ ਕਾ ਖ਼ਾਲਸਾ, ਵਾਹਿਗੁਰੂ ਜੀ ਕੀ ਫ਼ਤਹਿ
+          </p>
           <h1 className="text-3xl font-bold text-[#5b4c7d]">
             ਗੁਰਬਾਣੀ ਵਿਚਾਰ
           </h1>
@@ -152,7 +155,7 @@ export default function LoginPage() {
                 type="text"
                 autoCapitalize="none"
                 autoCorrect="off"
-                placeholder="ਜਿਵੇਂ ਅਮਨਦੀਪ ਕੌਰ ਜੀ"
+                placeholder="ਜਿਵੇਂ ਅਮਨਦੀਪ_ਕੌਰ_ਜੀ"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
@@ -193,10 +196,6 @@ export default function LoginPage() {
             </button>
           </form>
         </div>
-
-        <p className="mt-6 text-center text-xs text-[#8a7ba8]">
-          ਵਾਹਿਗੁਰੂ ਜੀ ਕਾ ਖ਼ਾਲਸਾ, ਵਾਹਿਗੁਰੂ ਜੀ ਕੀ ਫ਼ਤਹਿ
-        </p>
       </div>
     </div>
   );
