@@ -40,9 +40,11 @@ export default function AdminDashboard() {
         supabase.from("reading_progress").select("*"),
       ]);
 
-    setUsers((allUsers || []).filter((u) => u.role !== "admin"));
+    const nonAdminUsers = (allUsers || []).filter((u) => u.role !== "admin");
+    const nonAdminIds = new Set(nonAdminUsers.map((u) => u.id));
+    setUsers(nonAdminUsers);
     setShabads(allShabads || []);
-    setProgress(allProgress || []);
+    setProgress((allProgress || []).filter((p) => nonAdminIds.has(p.user_id)));
     setLoading(false);
   }, [router]);
 
@@ -80,18 +82,59 @@ export default function AdminDashboard() {
     ? progress.filter((p) => p.user_id === selectedUser.id)
     : [];
 
+  function exportToExcel() {
+    const rows = [
+      ["ਪਾਠਕ", "ਸ਼ਬਦ", "ਪੜ੍ਹਾਈ 1", "ਪੜ੍ਹਾਈ 2", "ਪੜ੍ਹਾਈ 3", "ਸਮਝ", "ਪੂਰਾ ਹੋਇਆ", "ਭੇਜਿਆ"],
+    ];
+    for (const u of users) {
+      for (const s of shabads) {
+        const p = progress.find(
+          (x) => x.user_id === u.id && x.shabad_id === s.id
+        );
+        rows.push([
+          u.full_name || u.username,
+          s.title,
+          p?.read_1 ? "✓" : "",
+          p?.read_2 ? "✓" : "",
+          p?.read_3 ? "✓" : "",
+          p?.understanding || "",
+          p?.completed ? "✓" : "",
+          p?.submitted_at ? new Date(p.submitted_at).toLocaleString() : "",
+        ]);
+      }
+    }
+    const csv = rows
+      .map((r) => r.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `gurbani-progress-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-6">
       <TopBar
         title="ਐਡਮਿਨ ਡੈਸ਼ਬੋਰਡ"
         name={profile?.full_name}
         right={
-          <button
-            className="btn-ghost text-sm"
-            onClick={() => router.push("/admin/shabads")}
-          >
-            ✦ ਸ਼ਬਦ ਪ੍ਰਬੰਧਨ
-          </button>
+          <div className="flex gap-2">
+            <button
+              className="btn-ghost text-sm"
+              onClick={exportToExcel}
+            >
+              ↓ Excel ਨਿਰਯਾਤ
+            </button>
+            <button
+              className="btn-ghost text-sm"
+              onClick={() => router.push("/admin/shabads")}
+            >
+              ✦ ਸ਼ਬਦ ਪ੍ਰਬੰਧਨ
+            </button>
+          </div>
         }
       />
 
