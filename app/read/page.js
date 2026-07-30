@@ -283,7 +283,7 @@ export default function ReadPage() {
                   key={i}
                   className="rounded-2xl bg-white/40 p-4 shadow-inner-soft"
                 >
-                  <p className="gurmukhi mb-2 text-lg font-semibold text-[#3f3560]">
+                  <p className="gurmukhi mb-2 break-all text-lg font-semibold text-[#3f3560]">
                     {line.gurmukhi}
                   </p>
                   {line.meaning && (
