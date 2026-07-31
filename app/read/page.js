@@ -6,6 +6,10 @@ import { supabase } from "../../lib/supabaseClient";
 import TopBar from "../../components/TopBar";
 import CountdownTimer from "../../components/CountdownTimer";
 
+const ADMIN_NAME = "ਅਮਨਦੀਪ ਕੌਰ";
+const EXTENSION_HOURS = 5;
+const HOUR_MS = 60 * 60 * 1000;
+
 export default function ReadPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -19,10 +23,22 @@ export default function ReadPage() {
   const [allDone, setAllDone] = useState(false);
   const [showUnderstanding, setShowUnderstanding] = useState(false);
 
-  // refs to always read fresh values inside async handlers
+  // Tick every second so we react to deadline expiry live
+  const [nowTs, setNowTs] = useState(Date.now());
+
+  // Popup state (one of: null | "extend" | "skipped")
+  const [popup, setPopup] = useState(null);
+  const [extending, setExtending] = useState(false);
+  const [skipping, setSkipping] = useState(false);
+
+  // Track which shabads we've already shown the "time's up" popup for in this
+  // session (so it doesn't reappear every second).
+  const seenExpiryRef = useRef(new Set());
+  const seenSkippedRef = useRef(new Set());
+
   const progressRef = useRef({});
   const profileRef = useRef(null);
-  const ensuringRef = useRef({}); // shabadId -> in-flight insert promise
+  const ensuringRef = useRef({});
 
   function setProgress(shabadId, row) {
     progressRef.current = { ...progressRef.current, [shabadId]: row };
@@ -70,14 +86,17 @@ export default function ReadPage() {
     let idx = 0;
     let firstInc = 0;
     if (sh && sh.length) {
-      const firstIncomplete = sh.findIndex((s) => !map[s.id]?.completed);
-      if (firstIncomplete === -1) {
+      // First shabad that is neither completed nor skipped is the "current" one.
+      const firstOpen = sh.findIndex(
+        (s) => !map[s.id]?.completed && !map[s.id]?.skipped
+      );
+      if (firstOpen === -1) {
         setAllDone(true);
         idx = sh.length - 1;
-        firstInc = sh.length; // everything done
+        firstInc = sh.length;
       } else {
-        idx = firstIncomplete;
-        firstInc = firstIncomplete;
+        idx = firstOpen;
+        firstInc = firstOpen;
       }
     }
     setFirstIncompleteIndex(firstInc);
@@ -89,16 +108,34 @@ export default function ReadPage() {
     loadEverything();
   }, [loadEverything]);
 
+  // Live ticking clock
+  useEffect(() => {
+    const t = setInterval(() => setNowTs(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
   const current = shabads[currentIndex];
   const currentProgress = current ? progressMap[current.id] : null;
 
-  // A shabad is "read-only" (locked from edits) if it's already completed —
-  // i.e. the user is browsing back to review it.
-  const isReadOnly = !!currentProgress?.completed;
+  // A shabad is "read-only" if it is already completed OR was skipped (deadline lapsed).
+  const isCompleted = !!currentProgress?.completed;
+  const isSkipped = !!currentProgress?.skipped;
+  const isReadOnly = isCompleted || isSkipped;
 
-  // Create a progress row for the current shabad if it doesn't exist yet.
-  // Uses a per-shabad in-flight promise so concurrent callers await the same
-  // insert instead of creating duplicates or bailing out.
+  // Compute the effective deadline: extended_until if set, else started_at + deadline_days.
+  function computeDeadline(prog, shabad) {
+    if (!prog?.started_at || !shabad) return null;
+    if (prog.extended_until) return new Date(prog.extended_until);
+    return new Date(
+      new Date(prog.started_at).getTime() +
+        (shabad.deadline_days || 2) * 24 * HOUR_MS
+    );
+  }
+
+  const currentDeadline = computeDeadline(currentProgress, current);
+  const timeExpired =
+    !!currentDeadline && nowTs >= currentDeadline.getTime();
+
   const ensureProgress = useCallback(async () => {
     if (!current || !profileRef.current) return null;
     const existing = progressRef.current[current.id];
@@ -128,8 +165,8 @@ export default function ReadPage() {
   }, [current]);
 
   useEffect(() => {
-    // Only create a fresh progress row for the *current* shabad the user is
-    // actively working on — never when they navigate back to review an old one.
+    // Only create a fresh progress row for the current shabad the user is
+    // actively working on (not for review browsing).
     if (
       !loading &&
       current &&
@@ -140,13 +177,53 @@ export default function ReadPage() {
     }
     const p = current ? progressRef.current[current.id] : null;
     setUnderstanding(p?.understanding || "");
-    setShowUnderstanding(!!p?.completed); // if reviewing, show the reflection
+    setShowUnderstanding(!!p?.completed || !!p?.skipped);
+    setPopup(null); // clear any lingering popup when switching shabads
     if (!loading) window.scrollTo({ top: 0, behavior: "smooth" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentIndex, loading]);
 
+  // Watch for deadline expiry on the current shabad and surface the popup.
+  useEffect(() => {
+    if (!current || !currentProgress || isReadOnly) return;
+    if (!currentDeadline) return;
+    if (!timeExpired) return;
+
+    // Extension not yet used → show "extend" popup once per session
+    if (!currentProgress.extension_used) {
+      if (!seenExpiryRef.current.has(current.id)) {
+        seenExpiryRef.current.add(current.id);
+        setPopup("extend");
+      }
+      return;
+    }
+
+    // Extension already used AND still not completed → auto-skip the shabad
+    // and show the "reported" popup.
+    if (currentProgress.extension_used && !currentProgress.skipped) {
+      if (!seenSkippedRef.current.has(current.id)) {
+        seenSkippedRef.current.add(current.id);
+        (async () => {
+          setSkipping(true);
+          const { data } = await supabase
+            .from("reading_progress")
+            .update({
+              skipped: true,
+              skipped_at: new Date().toISOString(),
+            })
+            .eq("id", currentProgress.id)
+            .select()
+            .single();
+          setSkipping(false);
+          if (data) setProgress(current.id, data);
+          setPopup("skipped");
+        })();
+      }
+    }
+  }, [timeExpired, current, currentProgress, currentDeadline, isReadOnly]);
+
   async function toggleRead(which) {
-    if (!current || isReadOnly) return;
+    if (!current || isReadOnly || timeExpired) return;
     const prog = (await ensureProgress()) || progressRef.current[current.id];
     if (!prog) return;
 
@@ -154,7 +231,6 @@ export default function ReadPage() {
     const atField = `read_${which}_at`;
     const newVal = !prog[field];
 
-    // enforce sequential order
     if (newVal) {
       if (which === 2 && !prog.read_1) return;
       if (which === 3 && !prog.read_2) return;
@@ -163,7 +239,6 @@ export default function ReadPage() {
       if (which === 2 && prog.read_3) return;
     }
 
-    // optimistic update
     const optimistic = {
       ...prog,
       [field]: newVal,
@@ -197,16 +272,36 @@ export default function ReadPage() {
   }
 
   function goNext() {
-    // Only allow moving forward to shabads the user has already reached
-    // (i.e. up to firstIncompleteIndex, clamped to the last shabad). Forward
-    // beyond that requires completing the current shabad.
     const maxIndex = shabads.length - 1;
     const target = Math.min(currentIndex + 1, firstIncompleteIndex, maxIndex);
     if (target > currentIndex) setCurrentIndex(target);
   }
 
+  async function handleExtend() {
+    if (!current || !currentProgress) return;
+    setExtending(true);
+    const extendedUntil = new Date(Date.now() + EXTENSION_HOURS * HOUR_MS);
+    const { data } = await supabase
+      .from("reading_progress")
+      .update({
+        extension_used: true,
+        extended_until: extendedUntil.toISOString(),
+      })
+      .eq("id", currentProgress.id)
+      .select()
+      .single();
+    setExtending(false);
+    if (data) {
+      setProgress(current.id, data);
+      // Let the timer effect see the new deadline
+      seenExpiryRef.current.delete(current.id);
+    }
+    setPopup(null);
+  }
+
   async function handleSubmitUnderstanding() {
     if (!understanding.trim() || !current || isReadOnly) return;
+    if (timeExpired) return; // safety — shouldn't happen because inputs disable
     const prog = progressRef.current[current.id];
     if (!prog) return;
     setSaving(true);
@@ -223,22 +318,43 @@ export default function ReadPage() {
     setSaving(false);
     if (data) {
       setProgress(current.id, data);
-      // Recompute first-incomplete index from fresh progressRef
-      const newFirstIncomplete = shabads.findIndex(
-        (s) => !progressRef.current[s.id]?.completed
-      );
-      const nextFirstInc =
-        newFirstIncomplete === -1 ? shabads.length : newFirstIncomplete;
-      setFirstIncompleteIndex(nextFirstInc);
-
-      if (currentIndex < shabads.length - 1) {
-        setCurrentIndex((i) => i + 1);
-        setUnderstanding("");
-        setShowUnderstanding(false);
-      } else {
-        setAllDone(true);
-      }
+      advanceToNextIncomplete();
     }
+  }
+
+  function advanceToNextIncomplete() {
+    // Recompute first-incomplete index from fresh progressRef
+    const newFirstIncomplete = shabads.findIndex(
+      (s) =>
+        !progressRef.current[s.id]?.completed &&
+        !progressRef.current[s.id]?.skipped
+    );
+    const nextFirstInc =
+      newFirstIncomplete === -1 ? shabads.length : newFirstIncomplete;
+    setFirstIncompleteIndex(nextFirstInc);
+
+    if (currentIndex < shabads.length - 1) {
+      setCurrentIndex((i) => i + 1);
+      setUnderstanding("");
+      setShowUnderstanding(false);
+    } else {
+      setAllDone(true);
+    }
+  }
+
+  function closeSkippedPopup() {
+    setPopup(null);
+    // After acknowledging the "reported" popup, we don't auto-advance —
+    // the user will click the "ਅੱਗੇ →" button which is now unlocked.
+    // We recompute firstIncompleteIndex so the Next button becomes enabled.
+    const newFirstIncomplete = shabads.findIndex(
+      (s) =>
+        !progressRef.current[s.id]?.completed &&
+        !progressRef.current[s.id]?.skipped
+    );
+    const nextFirstInc =
+      newFirstIncomplete === -1 ? shabads.length : newFirstIncomplete;
+    setFirstIncompleteIndex(nextFirstInc);
   }
 
   if (loading) {
@@ -264,31 +380,29 @@ export default function ReadPage() {
     );
   }
 
-  const deadline =
-    !isReadOnly && currentProgress?.started_at
-      ? new Date(
-          new Date(currentProgress.started_at).getTime() +
-            (current.deadline_days || 2) * 24 * 60 * 60 * 1000
-        )
-      : null;
-
   const completedCount = shabads.filter(
     (s) => progressMap[s.id]?.completed
   ).length;
+  const skippedCount = shabads.filter(
+    (s) => progressMap[s.id]?.skipped
+  ).length;
 
   const canGoPrev = currentIndex > 0;
-  // Allow forward navigation only to shabads the user has already reached,
-  // and never past the last shabad.
   const canGoNext =
     currentIndex < shabads.length - 1 &&
     currentIndex < firstIncompleteIndex;
+
+  // Timer is only shown for the shabad currently being worked on (not review
+  // and not skipped ones).
+  const timerDeadline =
+    !isReadOnly && currentDeadline ? currentDeadline : null;
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6">
       <TopBar
         title="ਗੁਰਬਾਣੀ ਵਿਚਾਰ"
         name={profile?.full_name}
-        right={deadline ? <CountdownTimer deadline={deadline} /> : null}
+        right={timerDeadline ? <CountdownTimer deadline={timerDeadline} /> : null}
       />
 
       {/* Progress bar */}
@@ -297,12 +411,19 @@ export default function ReadPage() {
           <span>
             ਸ਼ਬਦ {currentIndex + 1} / {shabads.length}
           </span>
-          <span>{completedCount} ਪੂਰੇ ਹੋਏ</span>
+          <span>
+            {completedCount} ਪੂਰੇ
+            {skippedCount > 0 ? ` • ${skippedCount} ਛੱਡੇ` : ""}
+          </span>
         </div>
         <div className="h-2.5 w-full overflow-hidden rounded-full bg-white/50">
           <div
             className="h-full rounded-full bg-gradient-to-r from-pastel-purple to-pastel-teal transition-all duration-500"
-            style={{ width: `${(completedCount / shabads.length) * 100}%` }}
+            style={{
+              width: `${
+                ((completedCount + skippedCount) / shabads.length) * 100
+              }%`,
+            }}
           />
         </div>
       </div>
@@ -316,9 +437,14 @@ export default function ReadPage() {
         >
           ← ਪਿੱਛੇ
         </button>
-        {isReadOnly && (
+        {isCompleted && (
           <span className="rounded-full bg-emerald-100/70 px-3 py-1 text-xs font-medium text-emerald-700">
-            ਇਹ ਸ਼ਬਦ ਪਹਿਲਾਂ ਹੀ ਪੂਰਾ ਹੋ ਚੁੱਕਾ ਹੈ (ਸਿਰਫ਼ ਵੇਖਣ ਲਈ)
+            ਇਹ ਸ਼ਬਦ ਪੂਰਾ ਹੋ ਚੁੱਕਾ ਹੈ (ਸਿਰਫ਼ ਵੇਖਣ ਲਈ)
+          </span>
+        )}
+        {isSkipped && (
+          <span className="rounded-full bg-rose-100/70 px-3 py-1 text-xs font-medium text-rose-700">
+            ਇਹ ਸ਼ਬਦ ਸਮੇਂ ਵਿੱਚ ਪੂਰਾ ਨਹੀਂ ਹੋਇਆ
           </span>
         )}
         <button
@@ -329,8 +455,6 @@ export default function ReadPage() {
           ਅੱਗੇ →
         </button>
       </div>
-
-      {allDone && completedCount === shabads.length && currentIndex === shabads.length - 1 && isReadOnly ? null : null}
 
       <div className="animate-fadeInUp">
         {/* Shabad card */}
@@ -370,7 +494,7 @@ export default function ReadPage() {
               const locked =
                 (n === 2 && !currentProgress?.read_1) ||
                 (n === 3 && !currentProgress?.read_2);
-              const disabled = isReadOnly || locked;
+              const disabled = isReadOnly || timeExpired || locked;
               return (
                 <label
                   key={n}
@@ -399,7 +523,7 @@ export default function ReadPage() {
             })}
           </div>
 
-          {!showUnderstanding && !isReadOnly && (
+          {!showUnderstanding && !isReadOnly && !timeExpired && (
             <button
               onClick={handleNext}
               disabled={!allThreeChecked}
@@ -417,19 +541,23 @@ export default function ReadPage() {
               ਆਪਣੇ ਸ਼ਬਦਾਂ ਵਿੱਚ
             </h3>
             <p className="mb-4 text-sm text-[#6a5b8a]">
-              {isReadOnly
+              {isSkipped
+                ? "ਇਸ ਸ਼ਬਦ ਦਾ ਸਮਾਂ ਖ਼ਤਮ ਹੋ ਗਿਆ ਸੀ, ਇਸ ਲਈ ਇਹ ਛੱਡਿਆ ਗਿਆ।"
+                : isCompleted
                 ? "ਤੁਸੀਂ ਇਸ ਸ਼ਬਦ ਬਾਰੇ ਪਹਿਲਾਂ ਇਹ ਸਾਂਝਾ ਕੀਤਾ ਸੀ:"
                 : "ਇਸ ਸ਼ਬਦ ਤੋਂ ਤੁਸੀਂ ਕੀ ਸਮਝਿਆ, ਸਾਂਝਾ ਕਰੋ। ਇਹ ਸਮੀਖਿਆ ਲਈ ਸੰਭਾਲਿਆ ਜਾਵੇਗਾ।"}
             </p>
-            <textarea
-              className="input-soft min-h-[140px] resize-y disabled:opacity-80"
-              placeholder="ਆਪਣੀ ਸਮਝ ਇੱਥੇ ਲਿਖੋ…"
-              value={understanding}
-              onChange={(e) => setUnderstanding(e.target.value)}
-              readOnly={isReadOnly}
-              disabled={isReadOnly}
-            />
-            {!isReadOnly && (
+            {!isSkipped && (
+              <textarea
+                className="input-soft min-h-[140px] resize-y disabled:opacity-80"
+                placeholder="ਆਪਣੀ ਸਮਝ ਇੱਥੇ ਲਿਖੋ…"
+                value={understanding}
+                onChange={(e) => setUnderstanding(e.target.value)}
+                readOnly={isReadOnly || timeExpired}
+                disabled={isReadOnly || timeExpired}
+              />
+            )}
+            {!isReadOnly && !timeExpired && (
               <button
                 onClick={handleSubmitUnderstanding}
                 disabled={saving || !understanding.trim()}
@@ -438,25 +566,81 @@ export default function ReadPage() {
                 {saving ? "ਸੰਭਾਲ ਰਹੇ…" : "ਭੇਜੋ ਤੇ ਅੱਗੇ ਵਧੋ →"}
               </button>
             )}
-            {isReadOnly && currentProgress?.submitted_at && (
+            {isCompleted && currentProgress?.submitted_at && (
               <p className="mt-3 text-xs text-[#8a7ba8]">
                 ਭੇਜਿਆ: {new Date(currentProgress.submitted_at).toLocaleString()}
+              </p>
+            )}
+            {isSkipped && currentProgress?.skipped_at && (
+              <p className="mt-3 text-xs text-rose-600">
+                ਛੱਡਿਆ ਗਿਆ: {new Date(currentProgress.skipped_at).toLocaleString()} — {ADMIN_NAME} ਜੀ ਨੂੰ ਸੂਚਿਤ ਕਰ ਦਿੱਤਾ ਗਿਆ ਹੈ।
               </p>
             )}
           </div>
         )}
       </div>
 
-      {allDone && completedCount === shabads.length && (
+      {allDone && completedCount + skippedCount === shabads.length && (
         <div className="glass-card mt-6 animate-fadeInUp p-6 text-center">
           <div className="mx-auto mb-3 flex h-14 w-14 animate-floaty items-center justify-center rounded-3xl bg-gradient-to-br from-pastel-rose to-pastel-purple text-2xl">
             🎉
           </div>
           <p className="font-semibold text-[#5b4c7d]">
-            ਤੁਸੀਂ ਸਾਰੇ ਸ਼ਬਦ ਪੂਰੇ ਕਰ ਲਏ ਹਨ! ਤੁਸੀਂ "ਪਿੱਛੇ" ਬਟਨ ਨਾਲ ਕੋਈ ਵੀ ਸ਼ਬਦ ਦੁਬਾਰਾ ਵੇਖ ਸਕਦੇ ਹੋ।
+            ਤੁਸੀਂ ਸਾਰੇ ਸ਼ਬਦ ਵੇਖ ਲਏ ਹਨ! ਤੁਸੀਂ &quot;ਪਿੱਛੇ&quot; ਬਟਨ ਨਾਲ ਕੋਈ ਵੀ ਸ਼ਬਦ ਦੁਬਾਰਾ ਵੇਖ ਸਕਦੇ ਹੋ।
           </p>
         </div>
       )}
+
+      {/* ================= POPUPS ================= */}
+      {popup === "extend" && (
+        <Modal>
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-3xl bg-amber-100 text-3xl">
+            ⏰
+          </div>
+          <h3 className="mb-3 text-center text-lg font-bold text-[#5b4c7d]">
+            ਤੁਹਾਡਾ ਸਮਾਂ ਖ਼ਤਮ ਹੋ ਗਿਆ ਹੈ
+          </h3>
+          <p className="mb-6 text-center text-sm leading-relaxed text-[#6a5b8a]">
+            ਹੁਣ ਇਹ ਸਿਰਫ਼ <span className="font-semibold text-[#5b4c7d]">{EXTENSION_HOURS} ਘੰਟੇ</span> ਹੋਰ ਵਧਾਇਆ ਜਾਵੇਗਾ। ਜੇਕਰ ਤੁਸੀਂ ਫਿਰ ਵੀ ਪੜ੍ਹ ਤੇ ਸਮਝ ਨਾ ਸਕੇ ਤਾਂ{" "}
+            <span className="font-semibold text-[#5b4c7d]">{ADMIN_NAME} ਜੀ</span> ਨੂੰ ਸੂਚਿਤ ਕਰ ਦਿੱਤਾ ਜਾਵੇਗਾ।
+          </p>
+          <button
+            onClick={handleExtend}
+            disabled={extending}
+            className="btn-3d w-full"
+          >
+            {extending ? "ਵਧਾ ਰਹੇ…" : `${EXTENSION_HOURS} ਘੰਟੇ ਵਧਾਓ`}
+          </button>
+        </Modal>
+      )}
+
+      {popup === "skipped" && (
+        <Modal>
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-3xl bg-rose-100 text-3xl">
+            📨
+          </div>
+          <h3 className="mb-3 text-center text-lg font-bold text-[#5b4c7d]">
+            ਸਮਾਂ ਪੂਰਾ ਹੋ ਗਿਆ
+          </h3>
+          <p className="mb-6 text-center text-sm leading-relaxed text-[#6a5b8a]">
+            ਤੁਹਾਡੀ ਰਿਪੋਰਟ{" "}
+            <span className="font-semibold text-[#5b4c7d]">{ADMIN_NAME} ਜੀ</span> ਨੂੰ ਭੇਜ ਦਿੱਤੀ ਗਈ ਹੈ। ਇਹ ਸ਼ਬਦ ਹੁਣ ਬੰਦ ਕਰ ਦਿੱਤਾ ਗਿਆ ਹੈ। ਤੁਸੀਂ &quot;ਅੱਗੇ&quot; ਬਟਨ ਨਾਲ ਅਗਲੇ ਸ਼ਬਦ ਤੇ ਜਾ ਸਕਦੇ ਹੋ।
+          </p>
+          <button onClick={closeSkippedPopup} className="btn-3d w-full">
+            ਬੰਦ ਕਰੋ
+          </button>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function Modal({ children }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 backdrop-blur-sm animate-fadeInUp">
+      <div className="glass-card w-full max-w-sm p-6 shadow-soft-lg">
+        {children}
+      </div>
     </div>
   );
 }

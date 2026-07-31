@@ -280,15 +280,10 @@ export default function AdminDashboard() {
       )}
 
       {/* Stat cards */}
-      <div className="mb-8 grid grid-cols-2 gap-4 md:grid-cols-4">
+      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard label="ਕੁੱਲ ਸ਼ਬਦ" value={totalShabads} emoji="📖" />
         <StatCard label="ਪਾਠਕ" value={users.length} emoji="🧑‍🤝‍🧑" />
         <StatCard label="ਸਰਗਰਮ ਪਾਠਕ" value={activeUsers} emoji="🔥" />
-        <StatCard
-          label="ਕੁੱਲ ਪੂਰੇ ਹੋਏ"
-          value={totalCompletions}
-          emoji="✅"
-        />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -301,8 +296,16 @@ export default function AdminDashboard() {
             {users.length === 0 && (
               <p className="text-sm text-[#8a7ba8]">ਅਜੇ ਕੋਈ ਪਾਠਕ ਨਹੀਂ।</p>
             )}
-            {users.map((u) => {
-              const done = userCompleted(u.id);
+            {[...users]
+              .map((u) => ({ u, done: userCompleted(u.id) }))
+              .sort((a, b) => {
+                if (b.done !== a.done) return b.done - a.done;
+                // Tie-breaker: alphabetical by display name / username
+                const an = (a.u.full_name || a.u.username || "").toLowerCase();
+                const bn = (b.u.full_name || b.u.username || "").toLowerCase();
+                return an.localeCompare(bn);
+              })
+              .map(({ u, done }) => {
               const pct = totalShabads
                 ? Math.round((done / totalShabads) * 100)
                 : 0;
