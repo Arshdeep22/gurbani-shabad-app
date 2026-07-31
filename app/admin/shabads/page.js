@@ -19,7 +19,6 @@ export default function ManageShabads() {
   const [deadlineDays, setDeadlineDays] = useState(2);
   const [orderIndex, setOrderIndex] = useState(0);
   const [lines, setLines] = useState([{ ...emptyLine }]);
-  const [bulkText, setBulkText] = useState("");
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState(null);
 
@@ -62,7 +61,6 @@ export default function ManageShabads() {
     setDeadlineDays(2);
     setOrderIndex(shabads.length);
     setLines([{ ...emptyLine }]);
-    setBulkText("");
     setMsg(null);
   }
 
@@ -72,7 +70,6 @@ export default function ManageShabads() {
     setDeadlineDays(s.deadline_days);
     setOrderIndex(s.order_index);
     setLines(s.lines?.length ? s.lines : [{ ...emptyLine }]);
-    setBulkText("");
     setMsg(null);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -87,27 +84,6 @@ export default function ManageShabads() {
   }
   function removeLine(i) {
     setLines((prev) => prev.filter((_, idx) => idx !== i));
-  }
-
-  // Parse bulk paste: alternating gurmukhi line then meaning line, separated by blank lines.
-  // Format expected: gurmukhi line, then meaning line(s). Pairs split on blank lines.
-  function parseBulk() {
-    const blocks = bulkText
-      .split(/\n\s*\n/)
-      .map((b) => b.trim())
-      .filter(Boolean);
-    // pair them: [gurmukhi, meaning, gurmukhi, meaning, ...]
-    const parsed = [];
-    for (let i = 0; i < blocks.length; i += 2) {
-      parsed.push({
-        gurmukhi: blocks[i] || "",
-        meaning: blocks[i + 1] || "",
-      });
-    }
-    if (parsed.length) {
-      setLines(parsed);
-      setMsg(`ਬਲਕ ਟੈਕਸਟ ਤੋਂ ${parsed.length} ਲਾਈਨ ਜੋੜੀਆਂ ਗਈਆਂ।`);
-    }
   }
 
   async function saveShabad() {
@@ -222,23 +198,6 @@ export default function ManageShabads() {
               onChange={(e) => setOrderIndex(e.target.value)}
             />
           </div>
-        </div>
-
-        {/* Bulk paste helper */}
-        <div className="mt-4 rounded-2xl bg-white/40 p-4">
-          <label className="mb-1.5 block text-sm font-medium text-[#6a5b8a]">
-            ਤੇਜ਼ ਪੇਸਟ (ਚੋਣਵਾਂ): ਗੁਰਮੁਖੀ ਤੇ ਅਰਥ ਦੇ ਹਿੱਸੇ ਖਾਲੀ ਲਾਈਨਾਂ ਨਾਲ ਵੱਖ ਕਰਕੇ
-            ਪੇਸਟ ਕਰੋ, ਫਿਰ "ਲਾਈਨਾਂ ਬਣਾਓ" ਦਬਾਓ।
-          </label>
-          <textarea
-            className="input-soft min-h-[100px] resize-y gurmukhi"
-            value={bulkText}
-            onChange={(e) => setBulkText(e.target.value)}
-            placeholder={"ਗੁਰਮੁਖੀ ਲਾਈਨ\n\nਅਰਥ ਲਾਈਨ\n\nਅਗਲੀ ਗੁਰਮੁਖੀ\n\nਅਗਲਾ ਅਰਥ"}
-          />
-          <button className="btn-ghost mt-2 text-sm" onClick={parseBulk}>
-            ਲਾਈਨਾਂ ਬਣਾਓ
-          </button>
         </div>
 
         {/* Line editor */}
