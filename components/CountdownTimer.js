@@ -21,8 +21,8 @@ export default function CountdownTimer({ deadline }) {
   const expired = diff <= 0;
 
   const abs = Math.abs(diff);
-  const days = Math.floor(abs / (1000 * 60 * 60 * 24));
-  const hours = Math.floor((abs / (1000 * 60 * 60)) % 24);
+  // Everything shown in HOURS — no day rollover.
+  const totalHours = Math.floor(abs / (1000 * 60 * 60));
   const mins = Math.floor((abs / (1000 * 60)) % 60);
   const secs = Math.floor((abs / 1000) % 60);
 
@@ -42,9 +42,10 @@ export default function CountdownTimer({ deadline }) {
         <span>ਸਮਾਂ ਖ਼ਤਮ</span>
       ) : (
         <span className="tabular-nums">
-          {days > 0 && `${days}d `}
-          {String(hours).padStart(2, "0")}:{String(mins).padStart(2, "0")}:
+          {String(totalHours).padStart(2, "0")}:
+          {String(mins).padStart(2, "0")}:
           {String(secs).padStart(2, "0")}
+          <span className="ml-1 text-xs font-normal opacity-70">hrs</span>
         </span>
       )}
     </div>
