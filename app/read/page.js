@@ -13,6 +13,7 @@ export default function ReadPage() {
   const [shabads, setShabads] = useState([]);
   const [progressMap, setProgressMap] = useState({});
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [firstIncompleteIndex, setFirstIncompleteIndex] = useState(0);
   const [understanding, setUnderstanding] = useState("");
   const [saving, setSaving] = useState(false);
   const [allDone, setAllDone] = useState(false);
@@ -67,15 +68,19 @@ export default function ReadPage() {
     setShabads(sh || []);
 
     let idx = 0;
+    let firstInc = 0;
     if (sh && sh.length) {
       const firstIncomplete = sh.findIndex((s) => !map[s.id]?.completed);
       if (firstIncomplete === -1) {
         setAllDone(true);
         idx = sh.length - 1;
+        firstInc = sh.length; // everything done
       } else {
         idx = firstIncomplete;
+        firstInc = firstIncomplete;
       }
     }
+    setFirstIncompleteIndex(firstInc);
     setCurrentIndex(idx);
     setLoading(false);
   }, [router]);
@@ -86,6 +91,10 @@ export default function ReadPage() {
 
   const current = shabads[currentIndex];
   const currentProgress = current ? progressMap[current.id] : null;
+
+  // A shabad is "read-only" (locked from edits) if it's already completed —
+  // i.e. the user is browsing back to review it.
+  const isReadOnly = !!currentProgress?.completed;
 
   // Create a progress row for the current shabad if it doesn't exist yet.
   // Uses a per-shabad in-flight promise so concurrent callers await the same
@@ -119,18 +128,25 @@ export default function ReadPage() {
   }, [current]);
 
   useEffect(() => {
-    if (!loading && current && !progressRef.current[current.id]) {
+    // Only create a fresh progress row for the *current* shabad the user is
+    // actively working on — never when they navigate back to review an old one.
+    if (
+      !loading &&
+      current &&
+      !progressRef.current[current.id] &&
+      currentIndex >= firstIncompleteIndex
+    ) {
       ensureProgress();
     }
     const p = current ? progressRef.current[current.id] : null;
     setUnderstanding(p?.understanding || "");
-    setShowUnderstanding(false);
+    setShowUnderstanding(!!p?.completed); // if reviewing, show the reflection
     if (!loading) window.scrollTo({ top: 0, behavior: "smooth" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentIndex, loading]);
 
   async function toggleRead(which) {
-    if (!current) return;
+    if (!current || isReadOnly) return;
     const prog = (await ensureProgress()) || progressRef.current[current.id];
     if (!prog) return;
 
@@ -176,8 +192,21 @@ export default function ReadPage() {
     setShowUnderstanding(true);
   }
 
+  function goPrev() {
+    if (currentIndex > 0) setCurrentIndex((i) => i - 1);
+  }
+
+  function goNext() {
+    // Only allow moving forward to shabads the user has already reached
+    // (i.e. up to firstIncompleteIndex, clamped to the last shabad). Forward
+    // beyond that requires completing the current shabad.
+    const maxIndex = shabads.length - 1;
+    const target = Math.min(currentIndex + 1, firstIncompleteIndex, maxIndex);
+    if (target > currentIndex) setCurrentIndex(target);
+  }
+
   async function handleSubmitUnderstanding() {
-    if (!understanding.trim() || !current) return;
+    if (!understanding.trim() || !current || isReadOnly) return;
     const prog = progressRef.current[current.id];
     if (!prog) return;
     setSaving(true);
@@ -194,6 +223,14 @@ export default function ReadPage() {
     setSaving(false);
     if (data) {
       setProgress(current.id, data);
+      // Recompute first-incomplete index from fresh progressRef
+      const newFirstIncomplete = shabads.findIndex(
+        (s) => !progressRef.current[s.id]?.completed
+      );
+      const nextFirstInc =
+        newFirstIncomplete === -1 ? shabads.length : newFirstIncomplete;
+      setFirstIncompleteIndex(nextFirstInc);
+
       if (currentIndex < shabads.length - 1) {
         setCurrentIndex((i) => i + 1);
         setUnderstanding("");
@@ -227,27 +264,35 @@ export default function ReadPage() {
     );
   }
 
-  const deadline = currentProgress?.started_at
-    ? new Date(
-        new Date(currentProgress.started_at).getTime() +
-          (current.deadline_days || 2) * 24 * 60 * 60 * 1000
-      )
-    : null;
+  const deadline =
+    !isReadOnly && currentProgress?.started_at
+      ? new Date(
+          new Date(currentProgress.started_at).getTime() +
+            (current.deadline_days || 2) * 24 * 60 * 60 * 1000
+        )
+      : null;
 
   const completedCount = shabads.filter(
     (s) => progressMap[s.id]?.completed
   ).length;
+
+  const canGoPrev = currentIndex > 0;
+  // Allow forward navigation only to shabads the user has already reached,
+  // and never past the last shabad.
+  const canGoNext =
+    currentIndex < shabads.length - 1 &&
+    currentIndex < firstIncompleteIndex;
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6">
       <TopBar
         title="ਗੁਰਬਾਣੀ ਵਿਚਾਰ"
         name={profile?.full_name}
-        right={<CountdownTimer deadline={deadline} />}
+        right={deadline ? <CountdownTimer deadline={deadline} /> : null}
       />
 
       {/* Progress bar */}
-      <div className="mb-6">
+      <div className="mb-4">
         <div className="mb-1.5 flex items-center justify-between text-xs font-medium text-[#6a5b8a]">
           <span>
             ਸ਼ਬਦ {currentIndex + 1} / {shabads.length}
@@ -262,111 +307,129 @@ export default function ReadPage() {
         </div>
       </div>
 
-      {allDone && completedCount === shabads.length ? (
-        <div className="glass-card animate-fadeInUp p-10 text-center">
-          <div className="mx-auto mb-4 flex h-20 w-20 animate-floaty items-center justify-center rounded-3xl bg-gradient-to-br from-pastel-rose to-pastel-purple text-4xl">
-            🎉
-          </div>
-          <h2 className="text-2xl font-bold text-[#5b4c7d]">
-            ਤੁਸੀਂ ਸਾਰੇ ਸ਼ਬਦ ਪੂਰੇ ਕਰ ਲਏ ਹਨ!
-          </h2>
-          <p className="mt-2 text-[#6a5b8a]">
-            ਤੁਹਾਡੀ ਲਗਨ ਲਈ ਧੰਨਵਾਦ। 🙏
-          </p>
-        </div>
-      ) : (
-        <div className="animate-fadeInUp">
-          {/* Shabad card */}
-          <div className="glass-card mb-6 overflow-hidden">
-            <div className="bg-gradient-to-r from-pastel-purple/30 to-pastel-teal/30 px-6 py-4">
-              <h2 className="gurmukhi text-xl font-semibold text-[#4a3d6b]">
-                {current.title}
-              </h2>
-            </div>
-            <div className="space-y-5 px-6 py-6">
-              {(current.lines || []).map((line, i) => (
-                <div
-                  key={i}
-                  className="rounded-2xl bg-white/40 p-4 shadow-inner-soft"
-                >
-                  <p className="gurmukhi mb-2 break-all text-lg font-semibold text-[#3f3560]">
-                    {line.gurmukhi}
-                  </p>
-                  {line.meaning && (
-                    <p className="gurmukhi text-[15px] leading-relaxed text-[#6a5b8a]">
-                      {line.meaning}
-                    </p>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
+      {/* Prev / Next nav */}
+      <div className="mb-6 flex items-center justify-between gap-3">
+        <button
+          onClick={goPrev}
+          disabled={!canGoPrev}
+          className="btn-ghost text-sm disabled:opacity-40"
+        >
+          ← ਪਿੱਛੇ
+        </button>
+        {isReadOnly && (
+          <span className="rounded-full bg-emerald-100/70 px-3 py-1 text-xs font-medium text-emerald-700">
+            ਇਹ ਸ਼ਬਦ ਪਹਿਲਾਂ ਹੀ ਪੂਰਾ ਹੋ ਚੁੱਕਾ ਹੈ (ਸਿਰਫ਼ ਵੇਖਣ ਲਈ)
+          </span>
+        )}
+        <button
+          onClick={goNext}
+          disabled={!canGoNext}
+          className="btn-ghost text-sm disabled:opacity-40"
+        >
+          ਅੱਗੇ →
+        </button>
+      </div>
 
-          {/* Reading checks */}
-          <div className="glass-card mb-6 p-6">
-            <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-[#8a7ba8]">
-              ਆਪਣੀ ਪੜ੍ਹਾਈ ਦੀ ਪੁਸ਼ਟੀ ਕਰੋ
-            </h3>
-            <div className="space-y-3">
-              {[1, 2, 3].map((n) => {
-                const checked = currentProgress?.[`read_${n}`];
-                const locked =
-                  (n === 2 && !currentProgress?.read_1) ||
-                  (n === 3 && !currentProgress?.read_2);
-                return (
-                  <label
-                    key={n}
-                    className={`checkbox-card ${checked ? "checked" : ""} ${
-                      locked ? "opacity-50" : ""
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      className="h-5 w-5 accent-[#b39ddb]"
-                      checked={!!checked}
-                      disabled={locked}
-                      onChange={() => toggleRead(n)}
-                    />
-                    <span className="text-sm font-medium text-[#5b4c7d]">
-                      ਮੈਂ ਇਸਨੂੰ{" "}
-                      {n === 1
-                        ? "ਪਹਿਲੀ"
-                        : n === 2
-                        ? "ਦੂਜੀ"
-                        : "ਤੀਜੀ"}{" "}
-                      ਵਾਰ ਪੜ੍ਹ ਤੇ ਸਮਝ ਲਿਆ ਹੈ
-                    </span>
-                  </label>
-                );
-              })}
-            </div>
+      {allDone && completedCount === shabads.length && currentIndex === shabads.length - 1 && isReadOnly ? null : null}
 
-            {!showUnderstanding && (
-              <button
-                onClick={handleNext}
-                disabled={!allThreeChecked}
-                className="btn-3d mt-6 w-full"
+      <div className="animate-fadeInUp">
+        {/* Shabad card */}
+        <div className="glass-card mb-6 overflow-hidden">
+          <div className="bg-gradient-to-r from-pastel-purple/30 to-pastel-teal/30 px-6 py-4">
+            <h2 className="gurmukhi text-xl font-semibold text-[#4a3d6b]">
+              {current.title}
+            </h2>
+          </div>
+          <div className="space-y-5 px-6 py-6">
+            {(current.lines || []).map((line, i) => (
+              <div
+                key={i}
+                className="rounded-2xl bg-white/40 p-4 shadow-inner-soft"
               >
-                ਅੱਗੇ →
-              </button>
-            )}
+                <p className="gurmukhi mb-2 break-all text-lg font-semibold text-[#3f3560]">
+                  {line.gurmukhi}
+                </p>
+                {line.meaning && (
+                  <p className="gurmukhi text-[15px] leading-relaxed text-[#6a5b8a]">
+                    {line.meaning}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Reading checks */}
+        <div className="glass-card mb-6 p-6">
+          <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-[#8a7ba8]">
+            ਆਪਣੀ ਪੜ੍ਹਾਈ ਦੀ ਪੁਸ਼ਟੀ ਕਰੋ
+          </h3>
+          <div className="space-y-3">
+            {[1, 2, 3].map((n) => {
+              const checked = currentProgress?.[`read_${n}`];
+              const locked =
+                (n === 2 && !currentProgress?.read_1) ||
+                (n === 3 && !currentProgress?.read_2);
+              const disabled = isReadOnly || locked;
+              return (
+                <label
+                  key={n}
+                  className={`checkbox-card ${checked ? "checked" : ""} ${
+                    disabled ? "opacity-60 cursor-not-allowed" : ""
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    className="h-5 w-5 accent-[#b39ddb]"
+                    checked={!!checked}
+                    disabled={disabled}
+                    onChange={() => toggleRead(n)}
+                  />
+                  <span className="text-sm font-medium text-[#5b4c7d]">
+                    ਮੈਂ ਇਸਨੂੰ{" "}
+                    {n === 1
+                      ? "ਪਹਿਲੀ"
+                      : n === 2
+                      ? "ਦੂਜੀ"
+                      : "ਤੀਜੀ"}{" "}
+                    ਵਾਰ ਪੜ੍ਹ ਤੇ ਸਮਝ ਲਿਆ ਹੈ
+                  </span>
+                </label>
+              );
+            })}
           </div>
 
-          {/* Understanding input */}
-          {showUnderstanding && (
-            <div className="glass-card animate-fadeInUp p-6">
-              <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-[#8a7ba8]">
-                ਆਪਣੇ ਸ਼ਬਦਾਂ ਵਿੱਚ
-              </h3>
-              <p className="mb-4 text-sm text-[#6a5b8a]">
-                ਇਸ ਸ਼ਬਦ ਤੋਂ ਤੁਸੀਂ ਕੀ ਸਮਝਿਆ, ਸਾਂਝਾ ਕਰੋ। ਇਹ ਸਮੀਖਿਆ ਲਈ ਸੰਭਾਲਿਆ ਜਾਵੇਗਾ।
-              </p>
-              <textarea
-                className="input-soft min-h-[140px] resize-y"
-                placeholder="ਆਪਣੀ ਸਮਝ ਇੱਥੇ ਲਿਖੋ…"
-                value={understanding}
-                onChange={(e) => setUnderstanding(e.target.value)}
-              />
+          {!showUnderstanding && !isReadOnly && (
+            <button
+              onClick={handleNext}
+              disabled={!allThreeChecked}
+              className="btn-3d mt-6 w-full"
+            >
+              ਅੱਗੇ →
+            </button>
+          )}
+        </div>
+
+        {/* Understanding input / display */}
+        {showUnderstanding && (
+          <div className="glass-card animate-fadeInUp p-6">
+            <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-[#8a7ba8]">
+              ਆਪਣੇ ਸ਼ਬਦਾਂ ਵਿੱਚ
+            </h3>
+            <p className="mb-4 text-sm text-[#6a5b8a]">
+              {isReadOnly
+                ? "ਤੁਸੀਂ ਇਸ ਸ਼ਬਦ ਬਾਰੇ ਪਹਿਲਾਂ ਇਹ ਸਾਂਝਾ ਕੀਤਾ ਸੀ:"
+                : "ਇਸ ਸ਼ਬਦ ਤੋਂ ਤੁਸੀਂ ਕੀ ਸਮਝਿਆ, ਸਾਂਝਾ ਕਰੋ। ਇਹ ਸਮੀਖਿਆ ਲਈ ਸੰਭਾਲਿਆ ਜਾਵੇਗਾ।"}
+            </p>
+            <textarea
+              className="input-soft min-h-[140px] resize-y disabled:opacity-80"
+              placeholder="ਆਪਣੀ ਸਮਝ ਇੱਥੇ ਲਿਖੋ…"
+              value={understanding}
+              onChange={(e) => setUnderstanding(e.target.value)}
+              readOnly={isReadOnly}
+              disabled={isReadOnly}
+            />
+            {!isReadOnly && (
               <button
                 onClick={handleSubmitUnderstanding}
                 disabled={saving || !understanding.trim()}
@@ -374,8 +437,24 @@ export default function ReadPage() {
               >
                 {saving ? "ਸੰਭਾਲ ਰਹੇ…" : "ਭੇਜੋ ਤੇ ਅੱਗੇ ਵਧੋ →"}
               </button>
-            </div>
-          )}
+            )}
+            {isReadOnly && currentProgress?.submitted_at && (
+              <p className="mt-3 text-xs text-[#8a7ba8]">
+                ਭੇਜਿਆ: {new Date(currentProgress.submitted_at).toLocaleString()}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
+      {allDone && completedCount === shabads.length && (
+        <div className="glass-card mt-6 animate-fadeInUp p-6 text-center">
+          <div className="mx-auto mb-3 flex h-14 w-14 animate-floaty items-center justify-center rounded-3xl bg-gradient-to-br from-pastel-rose to-pastel-purple text-2xl">
+            🎉
+          </div>
+          <p className="font-semibold text-[#5b4c7d]">
+            ਤੁਸੀਂ ਸਾਰੇ ਸ਼ਬਦ ਪੂਰੇ ਕਰ ਲਏ ਹਨ! ਤੁਸੀਂ "ਪਿੱਛੇ" ਬਟਨ ਨਾਲ ਕੋਈ ਵੀ ਸ਼ਬਦ ਦੁਬਾਰਾ ਵੇਖ ਸਕਦੇ ਹੋ।
+          </p>
         </div>
       )}
     </div>
