@@ -41,6 +41,12 @@ export default function ReadPage() {
       .select("*")
       .eq("id", uid)
       .single();
+
+    if (prof?.must_change_password) {
+      router.push("/change-password");
+      return;
+    }
+
     setProfile(prof);
     profileRef.current = prof;
 

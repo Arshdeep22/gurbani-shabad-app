@@ -9,7 +9,8 @@ Built with **Next.js** (React) + **Supabase** (Postgres + Auth) so it can be hos
 ## ✨ Features
 
 ### For readers
-- Beautiful **login / signup** screen.
+- Beautiful **login** screen (accounts are created by the admin only).
+- First-time login forces the reader to **change their password** from the default `131313`.
 - Reads shabads one at a time (Gurmukhi + meanings).
 - Three confirmation checkboxes: *read & understood* 1st, 2nd, 3rd time (must be checked in order — each check is saved to the DB instantly).
 - After all three checks → **Next** button unlocks → an input box appears asking *what did you understand*.
@@ -63,12 +64,27 @@ npm run dev
 ```
 Open <http://localhost:3000>.
 
-### 4. Make yourself an admin
-After signing up once, in Supabase **SQL Editor** run:
+### 4. Apply migrations
+Run these in the Supabase **SQL Editor** (in order, once):
 ```sql
-update public.profiles set role = 'admin' where email = 'you@example.com';
+-- if you haven't already
+\i supabase/migration_username.sql
+\i supabase/migration_admin_users.sql
 ```
-Log out and back in — you'll be routed to `/admin`.
+(or just copy-paste the contents of each file into the SQL Editor and click **Run**).
+
+### 5. Make yourself an admin
+Public sign-up is disabled — accounts are created only by admins. To bootstrap the very first admin:
+
+1. In the Supabase dashboard go to **Authentication → Users → Add user**, create a user with email `admin@gurbani.local` and any password of your choice (this becomes your username `admin`).
+2. In **SQL Editor** run:
+   ```sql
+   update public.profiles
+   set role = 'admin', must_change_password = false
+   where email = 'admin@gurbani.local';
+   ```
+3. Log in from the app with username `admin` and the password you set.
+4. Use the **+ ਪਾਠਕ ਸ਼ਾਮਲ ਕਰੋ** ("Add reader") button on the admin dashboard to create all other users. Each new user gets the default password **`131313`** and is forced to change it on first login.
 
 ---
 

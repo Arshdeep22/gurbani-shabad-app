@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabaseClient";
 import TopBar from "../../components/TopBar";
 
+const DEFAULT_PASSWORD = "131313";
+
 export default function AdminDashboard() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -13,6 +15,14 @@ export default function AdminDashboard() {
   const [shabads, setShabads] = useState([]);
   const [progress, setProgress] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
+
+  // Add-user form state
+  const [showAddUser, setShowAddUser] = useState(false);
+  const [newFullName, setNewFullName] = useState("");
+  const [newUsername, setNewUsername] = useState("");
+  const [addLoading, setAddLoading] = useState(false);
+  const [addErr, setAddErr] = useState(null);
+  const [addMsg, setAddMsg] = useState(null);
 
   const load = useCallback(async () => {
     const { data: sessionData } = await supabase.auth.getSession();
@@ -26,6 +36,11 @@ export default function AdminDashboard() {
       .select("*")
       .eq("id", uid)
       .single();
+
+    if (prof?.must_change_password) {
+      router.push("/change-password");
+      return;
+    }
 
     if (prof?.role !== "admin") {
       router.push("/read");
@@ -52,6 +67,69 @@ export default function AdminDashboard() {
     load();
   }, [load]);
 
+  async function handleAddUser(e) {
+    e.preventDefault();
+    setAddErr(null);
+    setAddMsg(null);
+
+    const uname = newUsername.trim();
+    if (!uname) {
+      setAddErr("ਯੂਜ਼ਰਨੇਮ ਜ਼ਰੂਰੀ ਹੈ।");
+      return;
+    }
+
+    setAddLoading(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          fullName: newFullName.trim(),
+          username: uname,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "ਯੂਜ਼ਰ ਬਣਾਉਣ ਵਿੱਚ ਗੜਬੜ");
+      setAddMsg(
+        `ਯੂਜ਼ਰ "${uname}" ਬਣ ਗਿਆ। ਡਿਫਾਲਟ ਪਾਸਵਰਡ: ${DEFAULT_PASSWORD}`
+      );
+      setNewFullName("");
+      setNewUsername("");
+      await load();
+    } catch (e) {
+      setAddErr(e.message);
+    } finally {
+      setAddLoading(false);
+    }
+  }
+
+  async function handleDeleteUser(user) {
+    const ok = window.confirm(
+      `ਕੀ ਤੁਸੀਂ ਯਕੀਨ ਨਾਲ "${user.full_name || user.username}" ਨੂੰ ਹਟਾਉਣਾ ਚਾਹੁੰਦੇ ਹੋ? ਇਹ ਵਾਪਸ ਨਹੀਂ ਹੋ ਸਕਦਾ।`
+    );
+    if (!ok) return;
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      const res = await fetch(`/api/admin/users?id=${user.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "ਹਟਾਉਣ ਵਿੱਚ ਗੜਬੜ");
+      if (selectedUser?.id === user.id) setSelectedUser(null);
+      await load();
+    } catch (e) {
+      alert(e.message);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -67,12 +145,10 @@ export default function AdminDashboard() {
   const totalCompletions = completedRows.length;
   const activeUsers = new Set(progress.map((p) => p.user_id)).size;
 
-  // per-user completed count
   function userCompleted(userId) {
     return progress.filter((p) => p.user_id === userId && p.completed).length;
   }
 
-  // per-shabad completed count
   function shabadCompleted(shabadId) {
     return progress.filter((p) => p.shabad_id === shabadId && p.completed)
       .length;
@@ -121,11 +197,14 @@ export default function AdminDashboard() {
         title="ਐਡਮਿਨ ਡੈਸ਼ਬੋਰਡ"
         name={profile?.full_name}
         right={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               className="btn-ghost text-sm"
-              onClick={exportToExcel}
+              onClick={() => setShowAddUser((s) => !s)}
             >
+              + ਪਾਠਕ ਸ਼ਾਮਲ ਕਰੋ
+            </button>
+            <button className="btn-ghost text-sm" onClick={exportToExcel}>
               ↓ Excel ਨਿਰਯਾਤ
             </button>
             <button
@@ -137,6 +216,68 @@ export default function AdminDashboard() {
           </div>
         }
       />
+
+      {/* Add user panel */}
+      {showAddUser && (
+        <div className="glass-card mb-6 animate-fadeInUp p-6">
+          <h3 className="mb-1 text-lg font-semibold text-[#5b4c7d]">
+            ਨਵਾਂ ਪਾਠਕ ਸ਼ਾਮਲ ਕਰੋ
+          </h3>
+          <p className="mb-4 text-sm text-[#8a7ba8]">
+            ਸਾਰੇ ਨਵੇਂ ਪਾਠਕਾਂ ਦਾ ਡਿਫਾਲਟ ਪਾਸਵਰਡ{" "}
+            <span className="font-semibold text-[#5b4c7d]">
+              {DEFAULT_PASSWORD}
+            </span>{" "}
+            ਹੋਵੇਗਾ। ਪਹਿਲੀ ਵਾਰ ਲੌਗ-ਇਨ ਕਰਨ ਤੇ ਪਾਠਕ ਨੂੰ ਪਾਸਵਰਡ ਬਦਲਣਾ ਪਵੇਗਾ।
+          </p>
+          <form onSubmit={handleAddUser} className="grid gap-4 md:grid-cols-2">
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-[#6a5b8a]">
+                ਪੂਰਾ ਨਾਮ
+              </label>
+              <input
+                className="input-soft"
+                type="text"
+                placeholder="ਜਿਵੇਂ ਅਮਨਦੀਪ ਕੌਰ ਜੀ"
+                value={newFullName}
+                onChange={(e) => setNewFullName(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-[#6a5b8a]">
+                ਯੂਜ਼ਰਨੇਮ
+              </label>
+              <input
+                className="input-soft"
+                type="text"
+                autoCapitalize="none"
+                autoCorrect="off"
+                placeholder="ਜਿਵੇਂ amandeep_kaur"
+                value={newUsername}
+                onChange={(e) => setNewUsername(e.target.value)}
+                required
+              />
+            </div>
+
+            {addErr && (
+              <div className="rounded-xl bg-rose-100/70 px-4 py-2.5 text-sm text-rose-600 md:col-span-2">
+                {addErr}
+              </div>
+            )}
+            {addMsg && (
+              <div className="rounded-xl bg-emerald-100/70 px-4 py-2.5 text-sm text-emerald-700 md:col-span-2">
+                {addMsg}
+              </div>
+            )}
+
+            <div className="md:col-span-2">
+              <button type="submit" className="btn-3d w-full" disabled={addLoading}>
+                {addLoading ? "ਬਣਾ ਰਿਹਾ ਹੈ…" : "ਯੂਜ਼ਰ ਬਣਾਓ"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* Stat cards */}
       <div className="mb-8 grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -166,30 +307,46 @@ export default function AdminDashboard() {
                 ? Math.round((done / totalShabads) * 100)
                 : 0;
               return (
-                <button
+                <div
                   key={u.id}
-                  onClick={() => setSelectedUser(u)}
-                  className={`w-full rounded-2xl p-3 text-left transition-all ${
+                  className={`flex items-center gap-2 rounded-2xl p-3 transition-all ${
                     selectedUser?.id === u.id
                       ? "bg-white/80 shadow-soft"
                       : "bg-white/40 hover:bg-white/60"
                   }`}
                 >
-                  <div className="mb-1 flex items-center justify-between">
-                    <span className="text-sm font-semibold text-[#5b4c7d]">
-                      {u.full_name || u.username}
-                    </span>
-                    <span className="text-xs font-medium text-[#8a7ba8]">
-                      {done}/{totalShabads}
-                    </span>
-                  </div>
-                  <div className="h-2 w-full overflow-hidden rounded-full bg-white/60">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-pastel-purple to-pastel-teal"
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
-                </button>
+                  <button
+                    onClick={() => setSelectedUser(u)}
+                    className="flex-1 text-left"
+                  >
+                    <div className="mb-1 flex items-center justify-between">
+                      <span className="text-sm font-semibold text-[#5b4c7d]">
+                        {u.full_name || u.username}
+                      </span>
+                      <span className="text-xs font-medium text-[#8a7ba8]">
+                        {done}/{totalShabads}
+                      </span>
+                    </div>
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-white/60">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-pastel-purple to-pastel-teal"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    {u.must_change_password && (
+                      <p className="mt-1 text-[10px] uppercase tracking-wide text-amber-600">
+                        ਪਾਸਵਰਡ ਬਦਲਣਾ ਬਾਕੀ
+                      </p>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => handleDeleteUser(u)}
+                    title="ਹਟਾਓ"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-rose-100/70 text-rose-600 transition hover:bg-rose-200/80"
+                  >
+                    ✕
+                  </button>
+                </div>
               );
             })}
           </div>
