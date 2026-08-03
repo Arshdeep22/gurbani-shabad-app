@@ -172,7 +172,7 @@ export default function ManageShabads() {
               className="input-soft gurmukhi"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="ਵਡਹੰਸੁ ਮਹਲਾ ੪॥"
+              placeholder="ਮੇਰਾਹਰਿਪ੍ਰਭੁਸੁੰਦਰੁਮੈਸਾਰਨਜਾਣੀ॥"
             />
           </div>
           <div>
