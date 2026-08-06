@@ -145,6 +145,19 @@ export default function AdminDashboard() {
   const totalCompletions = completedRows.length;
   const activeUsers = new Set(progress.map((p) => p.user_id)).size;
 
+  const skippedNotifications = progress
+    .filter((p) => p.skipped)
+    .map((p) => {
+      const user = users.find((u) => u.id === p.user_id);
+      const shabad = shabads.find((s) => s.id === p.shabad_id);
+      return {
+        ...p,
+        userName: user?.full_name || user?.username || "ਅਣਜਾਣ",
+        shabadTitle: shabad?.title || "ਸ਼ਬਦ",
+      };
+    })
+    .sort((a, b) => new Date(b.skipped_at) - new Date(a.skipped_at));
+
   function userCompleted(userId) {
     return progress.filter((p) => p.user_id === userId && p.completed).length;
   }
@@ -285,6 +298,41 @@ export default function AdminDashboard() {
         <StatCard label="ਪਾਠਕ" value={users.length} emoji="🧑‍🤝‍🧑" />
         <StatCard label="ਸਰਗਰਮ ਪਾਠਕ" value={activeUsers} emoji="🔥" />
       </div>
+
+      {/* Skipped shabad notifications */}
+      {skippedNotifications.length > 0 && (
+        <div className="glass-card mb-8 p-6">
+          <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold text-rose-600">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-rose-500 text-xs font-bold text-white">
+              {skippedNotifications.length}
+            </span>
+            ਸੂਚਨਾਵਾਂ — ਸਮਾਂ ਲੰਘ ਗਿਆ
+          </h3>
+          <div className="space-y-2">
+            {skippedNotifications.map((n) => (
+              <div
+                key={n.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-rose-50/70 px-4 py-3"
+              >
+                <div>
+                  <span className="font-semibold text-[#5b4c7d]">
+                    {n.userName}
+                  </span>
+                  <span className="mx-2 text-[#8a7ba8]">—</span>
+                  <span className="gurmukhi text-[#5b4c7d]">
+                    {n.shabadTitle}
+                  </span>
+                </div>
+                <span className="text-xs text-rose-500">
+                  {n.skipped_at
+                    ? new Date(n.skipped_at).toLocaleString()
+                    : ""}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Users progress */}
