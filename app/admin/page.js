@@ -145,6 +145,33 @@ export default function AdminDashboard() {
   const totalCompletions = completedRows.length;
   const activeUsers = new Set(progress.map((p) => p.user_id)).size;
 
+  const now = new Date();
+  const deadlineExpiredNotifications = progress
+    .filter((p) => {
+      if (p.completed || p.skipped || !p.started_at) return false;
+      const shabad = shabads.find((s) => s.id === p.shabad_id);
+      const deadlineDays = shabad?.deadline_days || 2;
+      const deadline = new Date(
+        new Date(p.started_at).getTime() + deadlineDays * 24 * 60 * 60 * 1000
+      );
+      return now > deadline;
+    })
+    .map((p) => {
+      const user = users.find((u) => u.id === p.user_id);
+      const shabad = shabads.find((s) => s.id === p.shabad_id);
+      const deadlineDays = shabad?.deadline_days || 2;
+      const deadline = new Date(
+        new Date(p.started_at).getTime() + deadlineDays * 24 * 60 * 60 * 1000
+      );
+      return {
+        ...p,
+        userName: user?.full_name || user?.username || "ਅਣਜਾਣ",
+        shabadTitle: shabad?.title || "ਸ਼ਬਦ",
+        deadline,
+      };
+    })
+    .sort((a, b) => new Date(b.started_at) - new Date(a.started_at));
+
   const skippedNotifications = progress
     .filter((p) => p.skipped)
     .map((p) => {
@@ -298,6 +325,44 @@ export default function AdminDashboard() {
         <StatCard label="ਪਾਠਕ" value={users.length} emoji="🧑‍🤝‍🧑" />
         <StatCard label="ਸਰਗਰਮ ਪਾਠਕ" value={activeUsers} emoji="🔥" />
       </div>
+
+      {/* 48-hour deadline expired notifications */}
+      {deadlineExpiredNotifications.length > 0 && (
+        <div className="glass-card mb-8 p-6">
+          <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold text-amber-600">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-500 text-xs font-bold text-white">
+              {deadlineExpiredNotifications.length}
+            </span>
+            48 ਘੰਟੇ ਦੀ ਸਮਾਂ-ਸੀਮਾ ਲੰਘ ਗਈ
+          </h3>
+          <div className="space-y-2">
+            {deadlineExpiredNotifications.map((n) => (
+              <div
+                key={n.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-amber-50/70 px-4 py-3"
+              >
+                <div>
+                  <span className="font-semibold text-[#5b4c7d]">
+                    {n.userName}
+                  </span>
+                  <span className="mx-2 text-[#8a7ba8]">—</span>
+                  <span className="gurmukhi text-[#5b4c7d]">
+                    {n.shabadTitle}
+                  </span>
+                  {n.extension_used && (
+                    <span className="ml-2 rounded-full bg-amber-200 px-2 py-0.5 text-xs text-amber-700">
+                      ਵਾਧਾ ਵਰਤਿਆ
+                    </span>
+                  )}
+                </div>
+                <span className="text-xs text-amber-600">
+                  {n.deadline ? new Date(n.deadline).toLocaleString() : ""}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Skipped shabad notifications */}
       {skippedNotifications.length > 0 && (
