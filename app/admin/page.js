@@ -495,7 +495,7 @@ export default function AdminDashboard() {
                       </td>
                       <td className="max-w-xs px-3 py-3 text-[#6a5b8a]">
                         {p?.understanding ? (
-                          <span className="gurmukhi line-clamp-2">
+                          <span className="gurmukhi">
                             {p.understanding}
                           </span>
                         ) : (
