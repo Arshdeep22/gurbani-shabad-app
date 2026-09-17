@@ -7,7 +7,7 @@ import TopBar from "../../components/TopBar";
 import CountdownTimer from "../../components/CountdownTimer";
 
 const ADMIN_NAME = "ਅਮਨਦੀਪ ਕੌਰ";
-const EXTENSION_HOURS = 5;
+const EXTENSION_HOURS = 7;
 const HOUR_MS = 60 * 60 * 1000;
 
 export default function ReadPage() {

@@ -15,6 +15,8 @@ export default function AdminDashboard() {
   const [shabads, setShabads] = useState([]);
   const [progress, setProgress] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
+  const [dismissedDeadline, setDismissedDeadline] = useState(new Set());
+  const [dismissedSkipped, setDismissedSkipped] = useState(new Set());
 
   // Add-user form state
   const [showAddUser, setShowAddUser] = useState(false);
@@ -149,6 +151,7 @@ export default function AdminDashboard() {
   const deadlineExpiredNotifications = progress
     .filter((p) => {
       if (p.completed || p.skipped || !p.started_at) return false;
+      if (dismissedDeadline.has(p.id)) return false;
       const shabad = shabads.find((s) => s.id === p.shabad_id);
       const deadlineDays = shabad?.deadline_days || 2;
       const deadline = new Date(
@@ -173,7 +176,7 @@ export default function AdminDashboard() {
     .sort((a, b) => new Date(b.started_at) - new Date(a.started_at));
 
   const skippedNotifications = progress
-    .filter((p) => p.skipped)
+    .filter((p) => p.skipped && !dismissedSkipped.has(p.id))
     .map((p) => {
       const user = users.find((u) => u.id === p.user_id);
       const shabad = shabads.find((s) => s.id === p.shabad_id);
@@ -329,12 +332,28 @@ export default function AdminDashboard() {
       {/* 48-hour deadline expired notifications */}
       {deadlineExpiredNotifications.length > 0 && (
         <div className="glass-card mb-8 p-6">
-          <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold text-amber-600">
-            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-500 text-xs font-bold text-white">
-              {deadlineExpiredNotifications.length}
-            </span>
-            48 ਘੰਟੇ ਦੀ ਸਮਾਂ-ਸੀਮਾ ਲੰਘ ਗਈ
-          </h3>
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h3 className="flex items-center gap-2 text-lg font-semibold text-amber-600">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-500 text-xs font-bold text-white">
+                {deadlineExpiredNotifications.length}
+              </span>
+              48 ਘੰਟੇ ਦੀ ਸਮਾਂ-ਸੀਮਾ ਲੰਘ ਗਈ
+            </h3>
+            <button
+              onClick={() =>
+                setDismissedDeadline(
+                  (prev) =>
+                    new Set([
+                      ...prev,
+                      ...deadlineExpiredNotifications.map((n) => n.id),
+                    ])
+                )
+              }
+              className="shrink-0 rounded-xl bg-amber-100/70 px-3 py-1.5 text-xs font-medium text-amber-700 transition hover:bg-amber-200/80"
+            >
+              ਸਭ ਸਾਫ਼ ਕਰੋ
+            </button>
+          </div>
           <div className="space-y-2">
             {deadlineExpiredNotifications.map((n) => (
               <div
@@ -355,9 +374,20 @@ export default function AdminDashboard() {
                     </span>
                   )}
                 </div>
-                <span className="text-xs text-amber-600">
-                  {n.deadline ? new Date(n.deadline).toLocaleString() : ""}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-amber-600">
+                    {n.deadline ? new Date(n.deadline).toLocaleString() : ""}
+                  </span>
+                  <button
+                    onClick={() =>
+                      setDismissedDeadline((prev) => new Set([...prev, n.id]))
+                    }
+                    title="ਹਟਾਓ"
+                    className="flex h-7 w-7 items-center justify-center rounded-full bg-amber-200/70 text-amber-700 transition hover:bg-amber-300/80"
+                  >
+                    ✕
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -367,12 +397,28 @@ export default function AdminDashboard() {
       {/* Skipped shabad notifications */}
       {skippedNotifications.length > 0 && (
         <div className="glass-card mb-8 p-6">
-          <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold text-rose-600">
-            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-rose-500 text-xs font-bold text-white">
-              {skippedNotifications.length}
-            </span>
-            ਸੂਚਨਾਵਾਂ — ਸਮਾਂ ਲੰਘ ਗਿਆ
-          </h3>
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h3 className="flex items-center gap-2 text-lg font-semibold text-rose-600">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-rose-500 text-xs font-bold text-white">
+                {skippedNotifications.length}
+              </span>
+              ਸੂਚਨਾਵਾਂ — ਸਮਾਂ ਲੰਘ ਗਿਆ
+            </h3>
+            <button
+              onClick={() =>
+                setDismissedSkipped(
+                  (prev) =>
+                    new Set([
+                      ...prev,
+                      ...skippedNotifications.map((n) => n.id),
+                    ])
+                )
+              }
+              className="shrink-0 rounded-xl bg-rose-100/70 px-3 py-1.5 text-xs font-medium text-rose-700 transition hover:bg-rose-200/80"
+            >
+              ਸਭ ਸਾਫ਼ ਕਰੋ
+            </button>
+          </div>
           <div className="space-y-2">
             {skippedNotifications.map((n) => (
               <div
@@ -388,11 +434,22 @@ export default function AdminDashboard() {
                     {n.shabadTitle}
                   </span>
                 </div>
-                <span className="text-xs text-rose-500">
-                  {n.skipped_at
-                    ? new Date(n.skipped_at).toLocaleString()
-                    : ""}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-rose-500">
+                    {n.skipped_at
+                      ? new Date(n.skipped_at).toLocaleString()
+                      : ""}
+                  </span>
+                  <button
+                    onClick={() =>
+                      setDismissedSkipped((prev) => new Set([...prev, n.id]))
+                    }
+                    title="ਹਟਾਓ"
+                    className="flex h-7 w-7 items-center justify-center rounded-full bg-rose-200/70 text-rose-700 transition hover:bg-rose-300/80"
+                  >
+                    ✕
+                  </button>
+                </div>
               </div>
             ))}
           </div>
