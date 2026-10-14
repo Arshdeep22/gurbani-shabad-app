@@ -6,11 +6,16 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-webpush.setVapidDetails(
-  "mailto:admin@gurbani.local",
-  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
-  process.env.VAPID_PRIVATE_KEY
-);
+let vapidInitialised = false;
+function ensureVapid() {
+  if (vapidInitialised) return;
+  webpush.setVapidDetails(
+    "mailto:admin@gurbani.local",
+    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
+    process.env.VAPID_PRIVATE_KEY
+  );
+  vapidInitialised = true;
+}
 
 async function getSubscriptions(userIds) {
   const { data } = await supabaseAdmin
@@ -22,6 +27,7 @@ async function getSubscriptions(userIds) {
 
 export async function POST(request) {
   try {
+    ensureVapid();
     const authHeader = request.headers.get("authorization") || "";
     const token = authHeader.replace("Bearer ", "");
     if (!token) return Response.json({ error: "Unauthorized" }, { status: 401 });
