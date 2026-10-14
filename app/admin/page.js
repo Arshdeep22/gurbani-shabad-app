@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabaseClient";
 import TopBar from "../../components/TopBar";
+import { usePushNotifications } from "../hooks/usePushNotifications";
 
 const DEFAULT_PASSWORD = "131313";
 
@@ -25,6 +26,8 @@ export default function AdminDashboard() {
   const [addLoading, setAddLoading] = useState(false);
   const [addErr, setAddErr] = useState(null);
   const [addMsg, setAddMsg] = useState(null);
+
+  const { subscribe, permission } = usePushNotifications();
 
   const load = useCallback(async () => {
     const { data: sessionData } = await supabase.auth.getSession();
@@ -49,6 +52,8 @@ export default function AdminDashboard() {
       return;
     }
     setProfile(prof);
+    // Subscribe admin to push notifications after confirming auth
+    subscribe();
 
     const [{ data: allUsers }, { data: allShabads }, { data: allProgress }] =
       await Promise.all([
@@ -63,7 +68,7 @@ export default function AdminDashboard() {
     setShabads(allShabads || []);
     setProgress((allProgress || []).filter((p) => nonAdminIds.has(p.user_id)));
     setLoading(false);
-  }, [router]);
+  }, [router, subscribe]);
 
   useEffect(() => {
     load();

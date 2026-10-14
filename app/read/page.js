@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabaseClient";
 import TopBar from "../../components/TopBar";
 import CountdownTimer from "../../components/CountdownTimer";
+import { usePushNotifications } from "../hooks/usePushNotifications";
 
 const ADMIN_NAME = "ਅਮਨਦੀਪ ਕੌਰ";
 const EXTENSION_HOURS = 7;
@@ -35,10 +36,15 @@ export default function ReadPage() {
   // session (so it doesn't reappear every second).
   const seenExpiryRef = useRef(new Set());
   const seenSkippedRef = useRef(new Set());
+  // Track which notifications have already been sent this session
+  const notifiedDeadlineRef = useRef(new Set());
+  const notifiedExtensionRef = useRef(new Set());
 
   const progressRef = useRef({});
   const profileRef = useRef(null);
   const ensuringRef = useRef({});
+
+  const { subscribe, sendNotification } = usePushNotifications();
 
   function setProgress(shabadId, row) {
     progressRef.current = { ...progressRef.current, [shabadId]: row };
@@ -66,6 +72,9 @@ export default function ReadPage() {
 
     setProfile(prof);
     profileRef.current = prof;
+
+    // Subscribe to push notifications after confirming the user is authenticated
+    subscribe();
 
     const { data: sh } = await supabase
       .from("shabads")
@@ -102,7 +111,7 @@ export default function ReadPage() {
     setFirstIncompleteIndex(firstInc);
     setCurrentIndex(idx);
     setLoading(false);
-  }, [router]);
+  }, [router, subscribe]);
 
   useEffect(() => {
     loadEverything();
@@ -194,6 +203,11 @@ export default function ReadPage() {
       if (!seenExpiryRef.current.has(current.id)) {
         seenExpiryRef.current.add(current.id);
         setPopup("extend");
+        // Send push notification to user and admin
+        if (!notifiedDeadlineRef.current.has(current.id)) {
+          notifiedDeadlineRef.current.add(current.id);
+          sendNotification("deadline_expired", current.title, profileRef.current?.full_name);
+        }
       }
       return;
     }
@@ -217,10 +231,15 @@ export default function ReadPage() {
           setSkipping(false);
           if (data) setProgress(current.id, data);
           setPopup("skipped");
+          // Send push notification to user and admin about extension expiry
+          if (!notifiedExtensionRef.current.has(current.id)) {
+            notifiedExtensionRef.current.add(current.id);
+            sendNotification("extension_expired", current.title, profileRef.current?.full_name);
+          }
         })();
       }
     }
-  }, [timeExpired, current, currentProgress, currentDeadline, isReadOnly]);
+  }, [timeExpired, current, currentProgress, currentDeadline, isReadOnly, sendNotification]);
 
   async function toggleRead(which) {
     if (!current || isReadOnly || timeExpired) return;

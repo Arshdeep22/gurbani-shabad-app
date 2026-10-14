@@ -1,21 +1,33 @@
 import "./globals.css";
+import ServiceWorkerRegistration from "./components/ServiceWorkerRegistration";
 
 export const metadata = {
   title: "ਗੁਰਬਾਣੀ ਵਿਚਾਰ",
   description:
     "ਗੁਰਬਾਣੀ ਸ਼ਬਦ ਪੜ੍ਹਨ, ਅਰਥ ਸਮਝਣ ਅਤੇ ਆਪਣੀ ਯਾਤਰਾ ਦੀ ਨਿਗਰਾਨੀ ਲਈ ਇੱਕ ਸ਼ਾਂਤ ਥਾਂ।",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "ਗੁਰਬਾਣੀ",
+  },
+  icons: {
+    apple: "/icons/icon-192.png",
+  },
 };
 
 export const viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
+  themeColor: "#B39DDB",
 };
 
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body>
+        <ServiceWorkerRegistration />
         {/* Decorative floating pastel blobs */}
         <div
           className="blob animate-floaty"
