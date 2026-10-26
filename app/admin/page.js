@@ -158,7 +158,8 @@ export default function AdminDashboard() {
       if (p.completed || p.skipped || !p.started_at) return false;
       if (dismissedDeadline.has(p.id)) return false;
       const shabad = shabads.find((s) => s.id === p.shabad_id);
-      const deadlineDays = shabad?.deadline_days || 2;
+      if (!shabad) return false;
+      const deadlineDays = shabad.deadline_days || 2;
       const deadline = new Date(
         new Date(p.started_at).getTime() + deadlineDays * 24 * 60 * 60 * 1000
       );
@@ -181,7 +182,10 @@ export default function AdminDashboard() {
     .sort((a, b) => new Date(b.started_at) - new Date(a.started_at));
 
   const skippedNotifications = progress
-    .filter((p) => p.skipped && !dismissedSkipped.has(p.id))
+    .filter((p) => {
+      if (!p.skipped || dismissedSkipped.has(p.id)) return false;
+      return shabads.some((s) => s.id === p.shabad_id);
+    })
     .map((p) => {
       const user = users.find((u) => u.id === p.user_id);
       const shabad = shabads.find((s) => s.id === p.shabad_id);
