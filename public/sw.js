@@ -19,6 +19,23 @@ self.addEventListener("activate", (e) => {
 
 self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
+
+  const url = new URL(e.request.url);
+  const isNavigation = e.request.mode === "navigate";
+  const isApiOrNextInternal =
+    url.pathname.startsWith("/api/") ||
+    url.pathname.startsWith("/_next/");
+
+  // Network-first for HTML navigation and API routes — prevents stale HTML
+  // with outdated JS chunk hashes from breaking the app on iOS after a deploy.
+  if (isNavigation || isApiOrNextInternal) {
+    e.respondWith(
+      fetch(e.request).catch(() => caches.match(e.request))
+    );
+    return;
+  }
+
+  // Cache-first for static assets (icons, fonts, etc.)
   e.respondWith(
     caches.match(e.request).then((cached) => {
       const network = fetch(e.request)

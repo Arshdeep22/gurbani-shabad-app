@@ -17,7 +17,7 @@ export function usePushNotifications() {
   const [subscribed, setSubscribed] = useState(false);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || typeof Notification === "undefined") return;
     setPermission(Notification.permission);
     if (Notification.permission !== "granted") return;
     (async () => {
