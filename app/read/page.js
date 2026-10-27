@@ -23,6 +23,8 @@ export default function ReadPage() {
   const [saving, setSaving] = useState(false);
   const [allDone, setAllDone] = useState(false);
   const [showUnderstanding, setShowUnderstanding] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [speechSupported, setSpeechSupported] = useState(false);
 
   // Tick every second so we react to deadline expiry live
   const [nowTs, setNowTs] = useState(Date.now());
@@ -43,6 +45,8 @@ export default function ReadPage() {
   const progressRef = useRef({});
   const profileRef = useRef(null);
   const ensuringRef = useRef({});
+  const recognitionRef = useRef(null);
+  const voiceBaseRef = useRef("");
 
   const { subscribe, sendNotification } = usePushNotifications();
 
@@ -361,6 +365,68 @@ export default function ReadPage() {
     }
   }
 
+  // Stop voice recognition when the user navigates to another shabad
+  useEffect(() => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+    }
+  }, [currentIndex]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    setSpeechSupported(!!(window.SpeechRecognition || window.webkitSpeechRecognition));
+    return () => { recognitionRef.current?.stop(); };
+  }, []);
+
+  function toggleVoiceTyping() {
+    if (isListening) {
+      recognitionRef.current?.stop();
+      return;
+    }
+    const SpeechRecognition =
+      typeof window !== "undefined" &&
+      (window.SpeechRecognition || window.webkitSpeechRecognition);
+    if (!SpeechRecognition) return;
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = "pa-IN";
+    recognition.continuous = true;
+    recognition.interimResults = true;
+
+    recognition.onresult = (event) => {
+      let interim = "";
+      let finalChunk = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        if (event.results[i].isFinal) {
+          finalChunk += event.results[i][0].transcript;
+        } else {
+          interim += event.results[i][0].transcript;
+        }
+      }
+      if (finalChunk) {
+        const sep = voiceBaseRef.current.length > 0 && !voiceBaseRef.current.endsWith(" ") ? " " : "";
+        voiceBaseRef.current = voiceBaseRef.current + sep + finalChunk;
+        setUnderstanding(voiceBaseRef.current);
+      } else if (interim) {
+        const sep = voiceBaseRef.current.length > 0 && !voiceBaseRef.current.endsWith(" ") ? " " : "";
+        setUnderstanding(voiceBaseRef.current + sep + interim);
+      }
+    };
+
+    recognition.onerror = () => {
+      setIsListening(false);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    voiceBaseRef.current = understanding;
+    recognitionRef.current = recognition;
+    recognition.start();
+    setIsListening(true);
+  }
+
   function closeSkippedPopup() {
     setPopup(null);
     // After acknowledging the "reported" popup, we don't auto-advance —
@@ -567,14 +633,42 @@ export default function ReadPage() {
                 : "ਇਸ ਸ਼ਬਦ ਤੋਂ ਤੁਸੀਂ ਕੀ ਸਮਝਿਆ, ਸਾਂਝਾ ਕਰੋ। ਇਹ ਸਮੀਖਿਆ ਲਈ ਸੰਭਾਲਿਆ ਜਾਵੇਗਾ।"}
             </p>
             {!isSkipped && (
-              <textarea
-                className="input-soft min-h-[140px] resize-y disabled:opacity-80"
-                placeholder="ਆਪਣੀ ਸਮਝ ਇੱਥੇ ਲਿਖੋ…"
-                value={understanding}
-                onChange={(e) => setUnderstanding(e.target.value)}
-                readOnly={isReadOnly || timeExpired}
-                disabled={isReadOnly || timeExpired}
-              />
+              <div className="relative">
+                <textarea
+                  className="input-soft min-h-[140px] w-full resize-y pb-10 disabled:opacity-80"
+                  placeholder="ਆਪਣੀ ਸਮਝ ਇੱਥੇ ਲਿਖੋ…"
+                  value={understanding}
+                  onChange={(e) => {
+                    setUnderstanding(e.target.value);
+                    if (recognitionRef.current) voiceBaseRef.current = e.target.value;
+                  }}
+                  readOnly={isReadOnly || timeExpired}
+                  disabled={isReadOnly || timeExpired}
+                />
+                {!isReadOnly && !timeExpired && speechSupported && (
+                  <button
+                    type="button"
+                    onClick={toggleVoiceTyping}
+                    className={`absolute bottom-3 right-3 flex h-8 w-8 items-center justify-center rounded-full transition-all ${
+                      isListening
+                        ? "animate-pulse bg-rose-500 text-white shadow-lg shadow-rose-200"
+                        : "bg-[#ede8ff] text-[#7c6aaa] hover:bg-[#7c6aaa] hover:text-white"
+                    }`}
+                    title={isListening ? "ਬੋਲਣਾ ਬੰਦ ਕਰੋ" : "ਆਵਾਜ਼ ਨਾਲ ਪੰਜਾਬੀ ਵਿੱਚ ਲਿਖੋ"}
+                  >
+                    {isListening ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
+                        <rect x="6" y="6" width="12" height="12" rx="2" />
+                      </svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
+                        <path d="M12 1a4 4 0 0 1 4 4v6a4 4 0 0 1-8 0V5a4 4 0 0 1 4-4Z" />
+                        <path d="M19 10a1 1 0 1 0-2 0 5 5 0 0 1-10 0 1 1 0 1 0-2 0 7 7 0 0 0 6 6.92V19H9a1 1 0 1 0 0 2h6a1 1 0 1 0 0-2h-2v-2.08A7 7 0 0 0 19 10Z" />
+                      </svg>
+                    )}
+                  </button>
+                )}
+              </div>
             )}
             {!isReadOnly && !timeExpired && (
               <button
