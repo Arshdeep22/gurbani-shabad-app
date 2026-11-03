@@ -68,11 +68,18 @@ export default function ChangePasswordPage() {
       });
       if (upErr) throw upErr;
 
-      const { error: profErr } = await supabase
-        .from("profiles")
-        .update({ must_change_password: false })
-        .eq("id", profile.id);
-      if (profErr) throw profErr;
+      // Clear the flag via a server-side route (service-role key) so the update
+      // is never blocked by RLS or a token rotation that updateUser triggers.
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      const res = await fetch("/api/auth/clear-password-flag", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json.error || "ਫਲੈਗ ਸਾਫ਼ ਕਰਨ ਵਿੱਚ ਗੜਬੜ");
+      }
 
       if (profile.role === "admin") router.push("/admin");
       else router.push("/read");

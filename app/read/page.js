@@ -55,6 +55,55 @@ export default function ReadPage() {
     setProgressMap(progressRef.current);
   }
 
+  const refreshProgress = useCallback(async () => {
+    if (!profileRef.current || !shabads.length) return;
+    const { data: prog } = await supabase
+      .from("reading_progress")
+      .select("*")
+      .eq("user_id", profileRef.current.id);
+    if (!prog) return;
+
+    const map = {};
+    prog.forEach((p) => (map[p.shabad_id] = p));
+    progressRef.current = map;
+    setProgressMap(map);
+
+    const firstOpen = shabads.findIndex(
+      (s) => !map[s.id]?.completed && !map[s.id]?.skipped
+    );
+    const newFirstInc = firstOpen === -1 ? shabads.length : firstOpen;
+    if (firstOpen === -1) setAllDone(true);
+    setFirstIncompleteIndex(newFirstInc);
+
+    // Advance currentIndex only if the shabad on screen is now completed/skipped
+    setCurrentIndex((idx) => {
+      const cur = shabads[idx];
+      if (cur && (map[cur.id]?.completed || map[cur.id]?.skipped)) {
+        return newFirstInc < shabads.length ? newFirstInc : shabads.length - 1;
+      }
+      return idx;
+    });
+  }, [shabads]);
+
+  // Re-fetch progress when the page becomes visible again (handles bfcache
+  // restores and returning from background on mobile — without these listeners,
+  // React state stays frozen at the moment the browser cached the page, so a
+  // completed shabad appears incomplete until the user logs out/in).
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refreshProgress();
+    };
+    const onPageShow = (e) => {
+      if (e.persisted) refreshProgress();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("pageshow", onPageShow);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("pageshow", onPageShow);
+    };
+  }, [refreshProgress]);
+
   const loadEverything = useCallback(async () => {
     const { data: sessionData } = await supabase.auth.getSession();
     if (!sessionData?.session) {
