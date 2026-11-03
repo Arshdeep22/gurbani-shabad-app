@@ -102,6 +102,60 @@ export async function POST(request) {
   }
 }
 
+export async function PATCH(request) {
+  try {
+    const check = await requireAdmin(request);
+    if (check.error) {
+      return NextResponse.json({ error: check.error }, { status: check.status });
+    }
+
+    const body = await request.json();
+    const userId = String(body?.id || "").trim();
+    if (!userId) {
+      return NextResponse.json({ error: "Missing id" }, { status: 400 });
+    }
+    if (userId === check.adminUserId) {
+      return NextResponse.json(
+        { error: "Cannot reset your own password via this endpoint" },
+        { status: 400 }
+      );
+    }
+
+    const admin = getAdminClient();
+
+    const { data: target } = await admin
+      .from("profiles")
+      .select("role")
+      .eq("id", userId)
+      .single();
+    if (target?.role === "admin") {
+      return NextResponse.json(
+        { error: "Cannot reset another admin's password" },
+        { status: 400 }
+      );
+    }
+
+    const { error: updateErr } = await admin.auth.admin.updateUserById(userId, {
+      password: DEFAULT_PASSWORD,
+    });
+    if (updateErr) {
+      return NextResponse.json({ error: updateErr.message }, { status: 400 });
+    }
+
+    await admin
+      .from("profiles")
+      .update({ must_change_password: true })
+      .eq("id", userId);
+
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    return NextResponse.json(
+      { error: e.message || "Server error" },
+      { status: 500 }
+    );
+  }
+}
+
 export async function DELETE(request) {
   try {
     const check = await requireAdmin(request);

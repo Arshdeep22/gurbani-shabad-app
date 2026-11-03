@@ -115,6 +115,44 @@ export default function AdminDashboard() {
     }
   }
 
+  async function handleChangeOwnPassword() {
+    const { error } = await supabase
+      .from("profiles")
+      .update({ must_change_password: true })
+      .eq("id", profile.id);
+    if (error) {
+      alert("ਪਾਸਵਰਡ ਬਦਲਣ ਲਈ ਤਿਆਰ ਕਰਨ ਵਿੱਚ ਗੜਬੜ: " + error.message);
+      return;
+    }
+    router.push("/change-password");
+  }
+
+  async function handleResetPassword(user) {
+    const ok = window.confirm(
+      `ਕੀ ਤੁਸੀਂ "${user.full_name || user.username}" ਦਾ ਪਾਸਵਰਡ ਡਿਫਾਲਟ (${DEFAULT_PASSWORD}) ਤੇ ਰੀਸੈੱਟ ਕਰਨਾ ਚਾਹੁੰਦੇ ਹੋ?`
+    );
+    if (!ok) return;
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      const res = await fetch("/api/admin/users", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ id: user.id }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "ਰੀਸੈੱਟ ਵਿੱਚ ਗੜਬੜ");
+      alert(`"${user.full_name || user.username}" ਦਾ ਪਾਸਵਰਡ ਰੀਸੈੱਟ ਹੋ ਗਿਆ। ਡਿਫਾਲਟ: ${DEFAULT_PASSWORD}`);
+      await load();
+    } catch (e) {
+      alert(e.message);
+    }
+  }
+
   async function handleDeleteUser(user) {
     const ok = window.confirm(
       `ਕੀ ਤੁਸੀਂ ਯਕੀਨ ਨਾਲ "${user.full_name || user.username}" ਨੂੰ ਹਟਾਉਣਾ ਚਾਹੁੰਦੇ ਹੋ? ਇਹ ਵਾਪਸ ਨਹੀਂ ਹੋ ਸਕਦਾ।`
@@ -250,6 +288,12 @@ export default function AdminDashboard() {
         name={profile?.full_name}
         right={
           <div className="flex flex-wrap gap-2">
+            <button
+              className="btn-ghost text-sm"
+              onClick={handleChangeOwnPassword}
+            >
+              🔑 ਪਾਸਵਰਡ ਬਦਲੋ
+            </button>
             <button
               className="btn-ghost text-sm"
               onClick={() => setShowAddUser((s) => !s)}
@@ -520,6 +564,13 @@ export default function AdminDashboard() {
                         ਪਾਸਵਰਡ ਬਦਲਣਾ ਬਾਕੀ
                       </p>
                     )}
+                  </button>
+                  <button
+                    onClick={() => handleResetPassword(u)}
+                    title="ਪਾਸਵਰਡ ਰੀਸੈੱਟ"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100/70 text-amber-600 transition hover:bg-amber-200/80"
+                  >
+                    ↺
                   </button>
                   <button
                     onClick={() => handleDeleteUser(u)}
